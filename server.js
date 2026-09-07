@@ -77,8 +77,9 @@ if (!fs.existsSync(TRACKS)) fs.mkdirSync(TRACKS, { recursive: true });
 
 function listTracks() {
   const demos = DEMOS.map(d => ({ id: d.id, title: d.title, url: '/tracks/' + d.id }));
+  const demoIds = new Set(DEMOS.map(d => d.id));
   const files = fs.readdirSync(TRACKS)
-    .filter(f => /\.(wav|mp3|m4a|ogg|opus|flac)$/i.test(f))
+    .filter(f => AUDIO_RE.test(f) && !demoIds.has(f))
     .map(f => ({ id: f, title: f.replace(/^[a-z0-9]+-/, '').replace(/\.[^.]+$/, ''), url: '/tracks/' + encodeURIComponent(f) }));
   return demos.concat(files);
 }
@@ -87,9 +88,20 @@ function listTracks() {
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
-  '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4',
-  '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.flac': 'audio/flac', '.png': 'image/png'
+  '.png': 'image/png',
+  '.mp3': 'audio/mpeg', '.mpga': 'audio/mpeg', '.mp2': 'audio/mpeg',
+  '.m4a': 'audio/mp4', '.m4b': 'audio/mp4', '.mp4': 'audio/mp4', '.aac': 'audio/aac',
+  '.adts': 'audio/aac', '.wav': 'audio/wav', '.wave': 'audio/wav',
+  '.aif': 'audio/aiff', '.aiff': 'audio/aiff', '.aifc': 'audio/aiff', '.caf': 'audio/x-caf',
+  '.flac': 'audio/flac', '.ogg': 'audio/ogg', '.oga': 'audio/ogg', '.opus': 'audio/ogg',
+  '.weba': 'audio/webm', '.webm': 'audio/webm', '.amr': 'audio/amr',
+  '.wma': 'audio/x-ms-wma', '.3gp': 'audio/3gpp', '.alac': 'audio/mp4'
 };
+
+/* Всё, что похоже на звук. Открыть файл в итоге должен браузер:
+   Safari не умеет ogg и opus, Chrome не умеет alac и wma.
+   Поэтому берём файл любой, а о неудаче честно сообщаем в комнату. */
+const AUDIO_RE = /\.(mp3|mpga|mp2|m4a|m4b|mp4|aac|adts|wav|wave|aif|aiff|aifc|caf|flac|ogg|oga|opus|weba|webm|amr|wma|alac|3gp)$/i;
 
 function serveFile(res, file) {
   fs.stat(file, (err, st) => {
@@ -127,17 +139,26 @@ const server = http.createServer((req, res) => {
   }
 
   if (p === '/api/upload' && req.method === 'POST') {
-    const raw = (url.searchParams.get('name') || 'upload').replace(/[^\w.\-А-Яа-яЁё ]/g, '_').slice(-80);
-    const name = Date.now().toString(36) + '-' + raw;
-    const out = fs.createWriteStream(path.join(TRACKS, name));
+    const given = (url.searchParams.get('name') || 'upload').slice(-90);
+    let ext = (given.match(/\.[A-Za-z0-9]{1,5}$/) || [''])[0].toLowerCase();
+    let base = given.slice(0, given.length - ext.length).replace(/[^\wА-Яа-яЁё .\-]/g, '_').trim() || 'трек';
+    // iPhone иногда отдаёт файл без расширения — тогда считаем его mp4-аудио
+    if (!ext || !AUDIO_RE.test('x' + ext)) ext = ext && MIME[ext] ? ext : '.m4a';
+    const name = Date.now().toString(36) + '-' + base + ext;
+    const dest = path.join(TRACKS, name);
+    const out = fs.createWriteStream(dest);
     let size = 0, tooBig = false;
     req.on('data', c => { size += c.length; if (size > 80e6) { tooBig = true; req.destroy(); } });
+    req.on('aborted', () => { out.destroy(); fs.existsSync(dest) && fs.unlinkSync(dest); });
     req.pipe(out);
+    out.on('error', () => { res.writeHead(500); res.end('не смог сохранить'); });
     out.on('finish', () => {
-      if (tooBig) { fs.unlinkSync(path.join(TRACKS, name)); res.writeHead(413); return res.end('слишком большой файл'); }
+      if (tooBig) { fs.existsSync(dest) && fs.unlinkSync(dest); res.writeHead(413); return res.end('файл больше 80 МБ'); }
+      if (!size) { fs.existsSync(dest) && fs.unlinkSync(dest); res.writeHead(400); return res.end('пустой файл'); }
+      console.log('принят файл', name, Math.round(size / 1e6) + ' МБ');
       broadcastAll({ type: 'tracks', tracks: listTracks() });
       res.writeHead(200, { 'Content-Type': MIME['.json'] });
-      res.end(JSON.stringify({ id: name }));
+      res.end(JSON.stringify({ id: name, title: base }));
     });
     return;
   }
@@ -267,6 +288,12 @@ wss.on('connection', ws => {
         const me = room.peers.get(selfId);
         if (me) me.speaking = !!m.on;
         broadcast(room, { type: 'speaking', id: selfId, on: !!m.on }, selfId);
+        break;
+      }
+
+      case 'note': {
+        const who = room.peers.get(selfId)?.name || '?';
+        broadcast(room, { type: 'note', text: who + ': ' + String(m.text || '').slice(0, 200) });
         break;
       }
 

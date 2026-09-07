@@ -75,9 +75,18 @@ async function loadTrack(trackId) {
   ui.state.textContent = 'загружаю';
   stopSource();
   buffer = null;
-  const res = await fetch(t.url);
-  const bytes = await res.arrayBuffer();
-  buffer = await actx.decodeAudioData(bytes);
+  try {
+    const res = await fetch(t.url);
+    if (!res.ok) throw new Error('файл не отдался');
+    const bytes = await res.arrayBuffer();
+    buffer = await actx.decodeAudioData(bytes);
+  } catch (e) {
+    buffer = null;
+    ui.state.textContent = 'формат не открылся';
+    toast('Это устройство не умеет открывать такой файл');
+    ws.send(JSON.stringify({ type: 'note', text: 'не смог открыть «' + t.title + '», нужен другой формат' }));
+    return;
+  }
   ui.state.textContent = 'готов, жду второго';
   ws.send(JSON.stringify({ type: 'ready', trackId }));
 }
@@ -109,9 +118,15 @@ function startAt(startAtServer, offset) {
   source.onended = () => { if (playing && pos >= buffer.duration - 0.3) { playing = false; ui.play.textContent = '▶'; ui.state.textContent = 'кончился'; } };
 }
 
-/* ожидаемая позиция по общим часам */
+/* Задержка вывода у каждого устройства своя: у Мака одна, у телефона другая.
+   Выравнивать надо то, что слышно, поэтому каждый забегает вперёд ровно
+   на свою задержку. Это убирает постоянный сдвиг в несколько миллисекунд. */
+function outLatency() {
+  if (!actx) return 0;
+  return actx.outputLatency || actx.baseLatency || 0;
+}
 function expectedPos() {
-  return serverOffset + (now() - serverStartAt) / 1000;
+  return serverOffset + (now() - serverStartAt) / 1000 + outLatency();
 }
 
 /* каждые 250 мс: считаем расхождение и правим темпом, а не рывком */
@@ -126,9 +141,9 @@ setInterval(() => {
   if (Math.abs(drift) > 0.25) {
     hardResyncs++;
     startAt(now() + 120, exp + 0.12);           // разошлись сильно — перезаводим
-  } else if (Math.abs(drift) > 0.004) {
+  } else if (Math.abs(drift) > 0.007) {
     corrections++;
-    rate = Math.max(0.97, Math.min(1.03, 1 - drift * 0.6));
+    rate = Math.max(0.98, Math.min(1.02, 1 - drift * 0.4));
     source.playbackRate.setTargetAtTime(rate, actx.currentTime, 0.08);
   } else if (rate !== 1) {
     rate = 1;
@@ -147,7 +162,8 @@ setInterval(() => {
 
 /* ---------------- 3. голос ---------------- */
 let pc = null, localStream = null, remoteAudio = $('#remoteAudio');
-let makingOffer = false, ignoreOffer = false, polite = true;
+let makingOffer = false, polite = true, isInitiator = false;
+let otherId = null, queuedSignals = [], gotRemote = false, stalled = 0;
 let micOn = true, headphones = false;
 let selfSpeaking = false, peerSpeaking = false;
 let stats = { rtt: 0, loss: 0, jitter: 0 };
@@ -173,12 +189,31 @@ async function getMic() {
   return s;
 }
 
+/* Первое предложение делает ровно один из двоих — тот, у кого меньше
+   идентификатор. Так не бывает встречных предложений, а значит и тупика.
+   Роль Мастера тут ни при чём: её можно передавать, не трогая связь. */
+function setupPeer(peers) {
+  const other = peers.find(p => p.id !== selfId);
+  if (!other) return;
+  otherId = other.id;
+  isInitiator = selfId < otherId;
+  polite = !isInitiator;
+  if (!pc) makePeer();
+}
+
+async function flushSignals() {
+  const q = queuedSignals; queuedSignals = [];
+  for (const m of q) await onSignal(m);
+}
+
 function makePeer() {
   pc = new RTCPeerConnection({ iceServers: cfg.iceServers, bundlePolicy: 'max-bundle' });
+  gotRemote = false; stalled = 0;
 
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
   pc.ontrack = e => {
+    gotRemote = true;
     remoteAudio.srcObject = e.streams[0];
     remoteAudio.volume = +ui.voice.value / 100;
     remoteAudio.play().catch(() => { });
@@ -187,11 +222,12 @@ function makePeer() {
     if (e.candidate) ws.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
   };
   pc.onnegotiationneeded = async () => {
+    if (!isInitiator) return;                  // отвечающая сторона предложений не шлёт
     try {
       makingOffer = true;
       await pc.setLocalDescription();
       ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
-    } catch (e) { console.warn(e); } finally { makingOffer = false; }
+    } catch (e) { console.warn('предложение', e); } finally { makingOffer = false; }
   };
   pc.oniceconnectionstatechange = () => {
     if (pc.iceConnectionState === 'failed') { toast('Связь просела, поднимаю заново'); pc.restartIce(); }
@@ -199,6 +235,8 @@ function makePeer() {
       if (pc && pc.iceConnectionState === 'disconnected') pc.restartIce();
     }, 2500);
   };
+
+  flushSignals();
 
   // ограничиваем голос: моно, немного, но стабильно
   setTimeout(async () => {
@@ -211,23 +249,49 @@ function makePeer() {
 }
 
 async function onSignal(m) {
-  if (!pc) return;
+  if (!pc) { queuedSignals.push(m); return; }
   const d = m.data;
   try {
+    if (d.needOffer) {                              // собеседник просит повторить
+      if (isInitiator) {
+        await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+        ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
+      }
+      return;
+    }
     if (d.description) {
-      const offerCollision = d.description.type === 'offer' && (makingOffer || pc.signalingState !== 'stable');
-      ignoreOffer = !polite && offerCollision;
-      if (ignoreOffer) return;
+      const collision = d.description.type === 'offer' && (makingOffer || pc.signalingState !== 'stable');
+      if (collision) {
+        if (!polite) return;                        // невежливая сторона своё предложение не бросает
+        try { await pc.setLocalDescription({ type: 'rollback' }); } catch (e) { }
+      }
       await pc.setRemoteDescription(d.description);
       if (d.description.type === 'offer') {
         await pc.setLocalDescription();
         ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
       }
     } else if (d.candidate) {
-      try { await pc.addIceCandidate(d.candidate); } catch (e) { if (!ignoreOffer) throw e; }
+      try { await pc.addIceCandidate(d.candidate); } catch (e) { }
     }
   } catch (e) { console.warn('сигналинг', e); }
 }
+
+/* Сторож: если через несколько секунд связь так и не сдвинулась,
+   предложение отправляется заново. Дешевле, чем разбираться потом. */
+setInterval(() => {
+  if (!pc || !otherId || gotRemote) { stalled = 0; return; }
+  stalled++;
+  if (stalled < 5) return;
+  stalled = 0;
+  if (isInitiator) {
+    pc.createOffer({ iceRestart: true })
+      .then(o => pc.setLocalDescription(o))
+      .then(() => ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } })))
+      .catch(() => { });
+  } else {
+    ws.send(JSON.stringify({ type: 'signal', data: { needOffer: true } }));
+  }
+}, 1000);
 
 /* определяем, что человек говорит — по своему микрофону, а не по чужому потоку */
 function watchLevel(stream) {
@@ -284,31 +348,36 @@ function connect() {
 
       case 'welcome':
         selfId = m.selfId; masterId = m.masterId; tracks = m.tracks;
-        polite = selfId !== m.masterId;                    // Мастер ведёт переговоры, гость уступает
         renderTracks(); renderRole(m.peers);
         m.chat.forEach(addChat);
+        // голос поднимаем ДО загрузки трека: иначе предложение собеседника
+        // придёт, пока мы качаем файл, и потеряется
+        setupPeer(m.peers);
         if (m.state.trackId) {
           await loadTrack(m.state.trackId);
           if (m.state.playing) startAt(m.state.startAt, m.state.offset);
           else { serverOffset = m.state.offset; }
         }
-        if (m.peers.length > 1 && !pc) { makePeer(); }
         break;
 
       case 'peers':
         masterId = m.masterId;
-        polite = selfId !== masterId;
         renderRole(m.peers);
-        if (m.peers.length > 1 && !pc) makePeer();
+        setupPeer(m.peers);
         break;
 
       case 'peer-left':
         if (pc) { pc.close(); pc = null; }
         remoteAudio.srcObject = null;
+        queuedSignals = []; otherId = null; gotRemote = false;
         peerSpeaking = false; applyDuck();
         break;
 
-      case 'signal': onSignal(m); break;
+      case 'note': addChat({ from: 'система', text: m.text }); break;
+
+      case 'signal':
+        if (!pc) queuedSignals.push(m); else await onSignal(m);
+        break;
       case 'tracks': tracks = m.tracks; renderTracks(); break;
       case 'load': await loadTrack(m.trackId); break;
       case 'play':
@@ -422,14 +491,25 @@ ui.chatInput.addEventListener('keydown', e => {
   }
 });
 
-ui.upload.onchange = async () => {
+ui.upload.onchange = () => {
   const f = ui.upload.files[0];
   if (!f) return;
-  toast('Загружаю ' + f.name);
-  const r = await fetch('/api/upload?name=' + encodeURIComponent(f.name), { method: 'POST', body: f });
-  const j = await r.json();
-  toast('Готово, трек в списке');
-  if (isMaster) ws.send(JSON.stringify({ type: 'select', trackId: j.id }));
+  if (f.size > 80e6) return toast('Файл больше 80 МБ, не потяну');
+  // XHR, а не fetch: только он показывает ход загрузки на телефоне
+  const x = new XMLHttpRequest();
+  x.open('POST', '/api/upload?name=' + encodeURIComponent(f.name));
+  x.upload.onprogress = e => {
+    if (e.lengthComputable) toast('Отправляю ' + Math.round(e.loaded / e.total * 100) + '%');
+  };
+  x.onload = () => {
+    if (x.status !== 200) return toast('Не приняли файл: ' + (x.responseText || x.status));
+    let j; try { j = JSON.parse(x.responseText); } catch (e) { return toast('Странный ответ сервера'); }
+    toast('Готово, трек в списке');
+    if (isMaster) ws.send(JSON.stringify({ type: 'select', trackId: j.id }));
+  };
+  x.onerror = () => toast('Связь оборвалась при загрузке');
+  x.send(f);
+  ui.upload.value = '';
 };
 
 /* ---------------- диагностика ---------------- */
@@ -452,6 +532,8 @@ setInterval(async () => {
     ['расхождение музыки', (drift * 1000).toFixed(1) + ' мс'],
     ['правок темпа', corrections + ', перезаводов ' + hardResyncs],
     ['голос', pc ? (pc.iceConnectionState + ', круг ' + stats.rtt + ' мс, дрожание ' + stats.jitter + ' мс, потери ' + stats.loss) : 'нет собеседника'],
+    ['поток собеседника', !pc ? '—' : (gotRemote ? (remoteAudio.paused ? 'пришёл, но не играет' : 'играет') : 'ещё не пришёл')],
+    ['я', pc ? (isInitiator ? 'звоню' : 'отвечаю') : '—'],
     ['эхоподавление', headphones ? 'выключено (наушники)' : 'включено (динамик)']
   ];
   ui.diag.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');

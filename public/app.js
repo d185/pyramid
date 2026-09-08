@@ -164,6 +164,15 @@ setInterval(() => {
 let pc = null, localStream = null, remoteAudio = $('#remoteAudio');
 let makingOffer = false, polite = true, isInitiator = false;
 let otherId = null, queuedSignals = [], gotRemote = false, stalled = 0;
+let pendingCandidates = [], iceSent = 0, iceGot = 0, iceDropped = 0;
+/* Сообщения по сети приходят пачкой, и каждое обрабатывается само по себе.
+   Кандидат мог обогнать предложение — тогда браузер его отвергал, и связь
+   оставалась без единой пары адресов. Поэтому обрабатываем строго по очереди. */
+let signalChain = Promise.resolve();
+function enqueueSignal(m) {
+  signalChain = signalChain.then(() => onSignal(m)).catch(e => console.warn('сигнал', e));
+  return signalChain;
+}
 let micOn = true, headphones = false;
 let selfSpeaking = false, peerSpeaking = false;
 let stats = { rtt: 0, loss: 0, jitter: 0 };
@@ -201,14 +210,14 @@ function setupPeer(peers) {
   if (!pc) makePeer();
 }
 
-async function flushSignals() {
+function flushSignals() {
   const q = queuedSignals; queuedSignals = [];
-  for (const m of q) await onSignal(m);
+  for (const m of q) enqueueSignal(m);
 }
 
 function makePeer() {
   pc = new RTCPeerConnection({ iceServers: cfg.iceServers, bundlePolicy: 'max-bundle' });
-  gotRemote = false; stalled = 0;
+  gotRemote = false; stalled = 0; pendingCandidates = []; iceSent = iceGot = iceDropped = 0;
 
   localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
 
@@ -219,7 +228,9 @@ function makePeer() {
     remoteAudio.play().catch(() => { });
   };
   pc.onicecandidate = e => {
-    if (e.candidate) ws.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
+    if (!e.candidate) return;
+    iceSent++;
+    ws.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate } }));
   };
   pc.onnegotiationneeded = async () => {
     if (!isInitiator) return;                  // отвечающая сторона предложений не шлёт
@@ -266,12 +277,18 @@ async function onSignal(m) {
         try { await pc.setLocalDescription({ type: 'rollback' }); } catch (e) { }
       }
       await pc.setRemoteDescription(d.description);
+      // описание есть — теперь придержанные кандидаты можно отдать браузеру
+      const held = pendingCandidates; pendingCandidates = [];
+      for (const c of held) {
+        try { await pc.addIceCandidate(c); iceGot++; } catch (e) { iceDropped++; }
+      }
       if (d.description.type === 'offer') {
         await pc.setLocalDescription();
         ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
       }
     } else if (d.candidate) {
-      try { await pc.addIceCandidate(d.candidate); } catch (e) { }
+      if (!pc.remoteDescription || !pc.remoteDescription.type) { pendingCandidates.push(d.candidate); return; }
+      try { await pc.addIceCandidate(d.candidate); iceGot++; } catch (e) { iceDropped++; }
     }
   } catch (e) { console.warn('сигналинг', e); }
 }
@@ -320,11 +337,15 @@ function setSelfSpeaking(on) {
   applyDuck();
 }
 
+/* Насколько музыка отходит назад, когда кто-то говорит.
+   0.72 — это примерно четверть громкости долой: слышно, но не провал. */
+const DUCK = 0.72;
+
 /* приглушение: когда кто-то говорит, музыка отходит на шаг назад */
 function applyDuck() {
   if (!duckGain) return;
   const on = selfSpeaking || peerSpeaking;
-  duckGain.gain.setTargetAtTime(on ? 0.45 : 1, actx.currentTime, on ? 0.06 : 0.25);
+  duckGain.gain.setTargetAtTime(on ? DUCK : 1, actx.currentTime, on ? 0.06 : 0.25);
   ui.duck.classList.toggle('on', on);
 }
 
@@ -375,9 +396,7 @@ function connect() {
 
       case 'note': addChat({ from: 'система', text: m.text }); break;
 
-      case 'signal':
-        if (!pc) queuedSignals.push(m); else await onSignal(m);
-        break;
+      case 'signal': enqueueSignal(m); break;
       case 'tracks': tracks = m.tracks; renderTracks(); break;
       case 'load': await loadTrack(m.trackId); break;
       case 'play':
@@ -532,6 +551,7 @@ setInterval(async () => {
     ['расхождение музыки', (drift * 1000).toFixed(1) + ' мс'],
     ['правок темпа', corrections + ', перезаводов ' + hardResyncs],
     ['голос', pc ? (pc.iceConnectionState + ', круг ' + stats.rtt + ' мс, дрожание ' + stats.jitter + ' мс, потери ' + stats.loss) : 'нет собеседника'],
+    ['кандидаты связи', !pc ? '—' : ('отправлено ' + iceSent + ', принято ' + iceGot + (iceDropped ? ', отвергнуто ' + iceDropped : '') + (pendingCandidates.length ? ', ждут ' + pendingCandidates.length : ''))],
     ['поток собеседника', !pc ? '—' : (gotRemote ? (remoteAudio.paused ? 'пришёл, но не играет' : 'играет') : 'ещё не пришёл')],
     ['я', pc ? (isInitiator ? 'звоню' : 'отвечаю') : '—'],
     ['эхоподавление', headphones ? 'выключено (наушники)' : 'включено (динамик)']

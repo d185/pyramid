@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -18,27 +18,42 @@ body{background:
   radial-gradient(100% 70% at 50% 100%,rgba(95,215,174,.08),transparent 60%),
   linear-gradient(180deg,#062A1C,#04170F 55%,#02100A)}
 h1,h2,h3{font-family:var(--serif);font-weight:400;margin:0}
-button,input{font:inherit;color:inherit}
+button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--gold-300);outline-offset:3px}
 
 .gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:20px;
   background:rgba(3,14,9,.96);backdrop-filter:blur(10px);transition:opacity .5s}
 .gate.gone{opacity:0;pointer-events:none}
-.gate .card{width:min(420px,100%);text-align:center}
+.gate .card{width:min(420px,100%);text-align:center;background:none;border:none;padding:0;margin:0}
 .gate h1{font-size:44px;letter-spacing:.06em}
 .gate p{color:#9CBBAD;font-size:14.5px;margin:10px 0 22px}
 .gate input{width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(224,200,120,.25);
   border-radius:2px;padding:12px 14px;margin-bottom:12px;text-align:center}
+.enter{width:100%;padding:13px;border:none;border-radius:2px;font-weight:600;cursor:pointer;
+  background:linear-gradient(140deg,var(--gold-300),var(--gold-500));color:#241A06}
 
 .wrap{max-width:520px;margin:0 auto;padding:16px 16px 40px}
-.top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .top .spacer{margin-left:auto}
+.brand{font-family:var(--serif);font-size:26px;letter-spacing:.06em}
 .chip{border:1px solid rgba(255,255,255,.24);background:rgba(8,20,15,.5);color:#EAF4EE;
   padding:8px 13px;border-radius:99px;cursor:pointer;font-size:13.5px;white-space:nowrap}
 .chip:hover{border-color:var(--gold-300)}
-.chip[aria-pressed="true"]{border-color:var(--gold-300);color:var(--gold-100)}
-.brand{font-family:var(--serif);font-size:26px;letter-spacing:.06em}
-.sub{font-size:12.5px;color:#8FB5A5}
+.sub{font-size:12.5px;color:#8FB5A5;margin-bottom:12px}
+select.lang{background:rgba(8,20,15,.6);border:1px solid rgba(255,255,255,.24);color:#EAF4EE;
+  border-radius:99px;padding:7px 10px;font-size:13.5px;cursor:pointer}
+
+.switch{display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+.switch .track{width:56px;height:30px;border-radius:99px;position:relative;flex:none;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.22);transition:.2s}
+.switch .knob{position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;
+  background:linear-gradient(160deg,#E9F6F0,#B7CFC5);transition:.2s;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.switch[aria-checked="true"] .track{background:linear-gradient(140deg,var(--jade),#1E8A67);border-color:transparent}
+.switch[aria-checked="true"] .knob{left:28px;background:linear-gradient(160deg,#FFFDF5,#E3C878)}
+.switch .labels{display:grid;line-height:1.2}
+.switch .on{font-size:15px}
+.switch .off{font-size:12px;color:#7FA294}
+.mode-hint{font-size:12px;color:#7FA294;line-height:1.45;margin-top:10px}
 
 .card{background:linear-gradient(180deg,rgba(9,40,28,.55),rgba(4,20,14,.75));
   border:1px solid rgba(224,200,120,.20);border-radius:6px;padding:16px;margin-bottom:14px}
@@ -48,10 +63,15 @@ button,input{font:inherit;color:inherit}
 #seek{width:100%;accent-color:var(--gold-500);margin:10px 0 2px}
 #seek:disabled{opacity:.4}
 .time{display:flex;justify-content:space-between;font-size:12px;color:#A9C4B8}
-.transport{display:flex;gap:10px;justify-content:center;margin-top:12px}
-.tbtn{width:48px;height:48px;border-radius:50%;border:1px solid rgba(246,231,184,.36);
-  background:rgba(255,255,255,.06);cursor:pointer}
-#play{border:none;color:#241A06;background:radial-gradient(circle at 36% 30%,var(--gold-100),var(--gold-300) 42%,var(--gold-500))}
+.transport{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px}
+.tbtn{height:46px;min-width:48px;padding:0 12px;border-radius:99px;border:1px solid rgba(246,231,184,.36);
+  background:rgba(255,255,255,.06);cursor:pointer;display:grid;place-items:center;font-size:13px}
+.tbtn:hover{border-color:var(--gold-300)}
+.tbtn:disabled{opacity:.3;cursor:not-allowed}
+.tbtn.main{width:54px;height:54px;min-width:54px;padding:0;border:none;color:#241A06;
+  background:radial-gradient(circle at 36% 30%,var(--gold-100),var(--gold-300) 42%,var(--gold-500))}
+.tbtn.main:disabled{background:rgba(255,255,255,.1);color:#9CBBAD}
+.tbtn svg{display:block}
 
 .rail{display:flex;gap:14px;overflow-x:auto;padding:6px 2px;scroll-snap-type:x mandatory;scrollbar-width:none}
 .rail::-webkit-scrollbar{display:none}
@@ -71,7 +91,7 @@ body.guest .item{opacity:.5}
 
 .notebook{background:linear-gradient(178deg,#F4EBD4,#E2D5B6);color:var(--ink);border-radius:3px;padding:12px 14px}
 .notebook h3{font-size:20px;margin-bottom:4px}
-#chat{max-height:150px;overflow:auto;
+#chat{min-height:84px;max-height:280px;overflow-y:auto;
   background-image:repeating-linear-gradient(180deg,transparent 0 27px,rgba(58,50,34,.16) 27px 28px)}
 .msg{font-family:var(--serif);font-size:17px;line-height:28px}
 .msg b{font-weight:600}
@@ -79,8 +99,8 @@ body.guest .item{opacity:.5}
   border-radius:2px;padding:8px 10px;color:var(--ink)}
 
 .bottom{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-#mic{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;flex:none;
-  background:radial-gradient(circle at 34% 28%,#8CF0CC,var(--jade) 45%,#17795A);color:#04160F;font-size:19px}
+#mic{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;flex:none;display:grid;place-items:center;
+  background:radial-gradient(circle at 34% 28%,#8CF0CC,var(--jade) 45%,#17795A);color:#04160F}
 #mic[aria-pressed="false"]{background:rgba(255,255,255,.12);color:#CDE3D8}
 .vol{display:grid;gap:2px;flex:1;min-width:120px}
 .vol label{font-size:12px;color:#B7D0C4}
@@ -95,69 +115,234 @@ body.guest .item{opacity:.5}
 .upload{display:inline-block;cursor:pointer;border:1px dashed rgba(246,231,184,.4);border-radius:2px;
   padding:9px 12px;font-size:13.5px;color:#EBDCB6;margin-top:10px}
 #upload{display:none}
-#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(14px);z-index:60;
+
+.sheet-back{position:fixed;inset:0;z-index:70;background:rgba(2,8,6,.7);backdrop-filter:blur(6px);
+  display:none;align-items:flex-end;justify-content:center}
+.sheet-back.on{display:flex}
+.sheet{width:min(520px,100%);background:linear-gradient(180deg,#0A3225,#052016);
+  border-top:1px solid rgba(246,231,184,.3);border-radius:16px 16px 0 0;
+  padding:18px 16px calc(18px + env(safe-area-inset-bottom));animation:up .22s ease-out both}
+@keyframes up{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+.sheet h3{font-size:23px;margin-bottom:4px}
+.sheet .note{font-size:12.5px;color:#7FA294;margin-bottom:14px}
+.opt{display:flex;align-items:center;gap:12px;width:100%;padding:14px;margin-bottom:8px;cursor:pointer;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);border-radius:4px;text-align:left;
+  color:#EAF4EE;text-decoration:none;font-size:15px}
+.opt:hover{border-color:var(--gold-300)}
+.opt .ic{width:26px;text-align:center;color:var(--gold-300);font-size:17px}
+.opt.close{justify-content:center;background:none;border-style:dashed;color:#9CBBAD}
+
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(14px);z-index:80;
   background:var(--gold-300);color:#241A06;padding:10px 18px;border-radius:99px;font-size:14px;
   opacity:0;transition:.24s;pointer-events:none;max-width:90vw;text-align:center}
 #toast.on{opacity:1;transform:translateX(-50%)}
+
+/* холст комнаты живёт под интерфейсом */
+#gl{position:fixed;inset:0;width:100%;height:100%;display:none;z-index:0}
+body.in-room #gl{display:block}
+body.in-room{background:linear-gradient(180deg,#062A1C,#04170F 55%,#02100A)}
+.vignette{position:fixed;inset:0;pointer-events:none;z-index:1;display:none;
+  background:radial-gradient(125% 95% at 50% 45%,transparent 42%,rgba(1,8,5,.45) 88%,rgba(1,6,4,.8) 100%)}
+body.in-room .vignette{display:block}
+body.in-room .wrap{position:relative;z-index:2}
+body.in-room .card{background:linear-gradient(180deg,rgba(6,26,18,.55),rgba(3,14,10,.72));backdrop-filter:blur(12px)}
+body.in-room .notebook{background:linear-gradient(178deg,rgba(244,235,212,.94),rgba(226,213,182,.94))}
+
+/* вращающаяся пирамида-логотип */
+.pyr-stage{perspective:900px;display:flex;justify-content:center;align-items:flex-end}
+.pyr{--s:34px;position:relative;width:var(--s);height:calc(var(--s)*.9);transform-style:preserve-3d;
+  animation:pyrSpin 30s linear infinite}
+.pyr .face{position:absolute;left:0;bottom:0;width:var(--s);height:calc(var(--s)*1.03);
+  clip-path:polygon(50% 0,100% 100%,0 100%);transform-origin:50% 100%;
+  background:linear-gradient(168deg,#1B6E51,#0B3A29 38%,#17805C 62%,#062419)}
+.pyr .face:nth-child(1){transform:rotateY(0deg) translateZ(calc(var(--s)/2)) rotateX(29deg)}
+.pyr .face:nth-child(2){transform:rotateY(90deg) translateZ(calc(var(--s)/2)) rotateX(29deg);filter:brightness(.78)}
+.pyr .face:nth-child(3){transform:rotateY(180deg) translateZ(calc(var(--s)/2)) rotateX(29deg);filter:brightness(.6)}
+.pyr .face:nth-child(4){transform:rotateY(270deg) translateZ(calc(var(--s)/2)) rotateX(29deg);filter:brightness(.86)}
+.pyr .face svg{position:absolute;inset:0;width:100%;height:100%}
+@keyframes pyrSpin{to{transform:rotateY(360deg)}}
+
+/* главная страница */
+.view{display:none}.view.on{display:block}
+.hero{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:center;padding:22px 0 8px}
+.hero h1{font-size:clamp(34px,7vw,52px);letter-spacing:.05em}
+.hero .tag{font-family:var(--serif);font-size:clamp(19px,3.4vw,24px);color:var(--gold-300);margin-top:4px}
+.hero p{color:#9CBBAD;font-size:14.5px;margin-top:12px;line-height:1.6}
+.hero .pyr{--s:min(150px,32vw)}
+.today-grid{display:grid;gap:14px}
+.today-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.today-date{font-family:var(--serif);font-size:clamp(24px,5vw,34px)}
+.today-clock{font-family:var(--serif);font-size:clamp(24px,5vw,34px);color:var(--gold-300)}
+.today-meta{font-size:13.5px;color:#8FB5A5}
+.vein-rule{height:1px;border:0;margin:14px 0;background:linear-gradient(90deg,transparent,var(--gold-500),transparent);opacity:.5}
+.hol{display:grid;gap:8px;font-size:14.5px}
+.hol div{display:flex;gap:10px;align-items:baseline}
+.hol .dot{color:var(--gold-500)}
+.quote{border-left:2px solid var(--gold-500);padding:4px 0 4px 16px;margin-bottom:14px}
+.quote q{font-family:var(--serif);font-style:italic;font-size:clamp(18px,3.4vw,23px);line-height:1.35;quotes:'«' '»'}
+.quote cite{display:block;margin-top:8px;font-style:normal;font-size:13px;color:#8FB5A5}
+.perks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.perk{font-size:13.5px;color:#9CBBAD;display:flex;gap:9px;align-items:flex-start;line-height:1.45}
+.perk .ic{color:var(--gold-300);flex:none}
+.portals{display:grid;gap:14px}
+.portal{position:relative;border:1px solid rgba(224,200,120,.22);border-radius:120px 120px 6px 6px;
+  overflow:hidden;cursor:pointer;background:none;padding:0;min-height:210px;width:100%;text-align:left;color:inherit}
+.portal canvas,.portal .bg{position:absolute;inset:0;width:100%;height:100%}
+.portal .plate{position:absolute;left:0;right:0;bottom:0;padding:14px 16px;
+  background:linear-gradient(0deg,rgba(3,10,7,.94),rgba(3,10,7,0))}
+.portal h3{font-size:23px}
+.portal p{font-size:13px;color:#A9C4B8;margin-top:3px}
+.portal:hover{border-color:var(--gold-300)}
 </style>
 </head>
 <body>
+<canvas id="gl"></canvas>
+<div class="vignette"></div>
 
 <div class="gate" id="gate"><div class="card">
   <h1>Pyramid</h1>
-  <p>Комната <b id="roomName"></b>. Музыка играет у каждого на своём устройстве и держится в общем времени, голос идёт напрямую.</p>
-  <input id="name" placeholder="Как вас зовут" autocomplete="nickname">
-  <button class="chip" id="enter" style="width:100%;padding:13px;background:linear-gradient(140deg,var(--gold-300),var(--gold-500));color:#241A06;border:none;font-weight:600">Войти в комнату</button>
-  <p style="margin-top:16px">Браузер спросит доступ к микрофону. Лучше в наушниках.</p>
+  <p id="gateLead"></p>
+  <input id="name" autocomplete="nickname">
+  <button class="enter" id="enter"></button>
+  <p id="gateMic" style="margin-top:16px"></p>
 </div></div>
 
 <div class="wrap">
   <div class="top">
+    <div class="pyr-stage"><div class="pyr" id="logoSmall"><div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1.2" opacity=".9"><path d="M50 4 C44 34 58 56 46 100"/><path d="M50 4 C62 40 40 70 66 100"/><path d="M52 22 C68 44 74 72 82 100"/></g></svg></div><div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1" opacity=".8"><path d="M50 6 C40 44 62 64 40 100"/></g></svg></div><div class="face"></div><div class="face"></div></div></div>
     <span class="brand">Pyramid</span>
     <span class="spacer"></span>
-    <button class="chip" id="headphones" aria-pressed="false">Я на динамике</button>
-    <button class="chip" id="transfer" style="display:none">Передать роль</button>
-    <button class="chip" id="invite">Пригласить</button>
+    <select class="lang" id="lang" aria-label="Language"></select>
+    <button class="chip" id="toRooms" style="display:none"></button>
+    <button class="chip" id="transfer" style="display:none"></button>
+    <button class="chip" id="invite" style="display:none"></button>
   </div>
-  <div class="sub" style="margin-bottom:12px"><span id="role">…</span> · <span id="peers"></span></div>
+
+  <!-- ГЛАВНАЯ -->
+  <div class="view on" id="viewHome">
+    <div class="hero">
+      <div>
+        <h1>Pyramid</h1>
+        <div class="tag" id="homeTag"></div>
+        <p id="homeLead"></p>
+      </div>
+      <div class="pyr-stage"><div class="pyr" id="logoBig"><div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1.2" opacity=".9"><path d="M50 4 C44 34 58 56 46 100"/><path d="M50 4 C62 40 40 70 66 100"/><path d="M52 22 C68 44 74 72 82 100"/></g></svg></div><div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1" opacity=".8"><path d="M50 6 C40 44 62 64 40 100"/></g></svg></div><div class="face"></div><div class="face"></div></div></div>
+    </div>
+
+    <div class="card today-grid">
+      <div class="today-head">
+        <span class="today-date" id="tDate"></span>
+        <span class="today-clock" id="tClock">—:—</span>
+      </div>
+      <div class="today-meta" id="tMeta"></div>
+      <hr class="vein-rule">
+      <div class="today-meta" id="tHolTitle"></div>
+      <div class="hol" id="tHol"></div>
+    </div>
+
+    <div class="card">
+      <div class="today-meta" id="tQuotesTitle" style="margin-bottom:10px"></div>
+      <div id="tQuotes"></div>
+    </div>
+
+    <div class="card">
+      <div class="perks" id="perks"></div>
+      <button class="enter" id="goRooms" style="margin-top:16px"></button>
+    </div>
+  </div>
+
+  <!-- ВЫБОР КОМНАТЫ -->
+  <div class="view" id="viewRooms">
+    <h2 style="font-family:var(--serif);font-size:clamp(24px,5vw,34px);margin:18px 0 6px" id="roomsTitle"></h2>
+    <p class="today-meta" id="roomsHint" style="margin-bottom:16px"></p>
+    <div class="portals">
+      <button class="portal" data-style="pyramid"><span class="bg" id="bgPyr" style="background:radial-gradient(120% 80% at 50% 12%,rgba(246,231,184,.45),transparent 58%),linear-gradient(180deg,#17805C,#0A3A28 55%,#04170F)"></span><span class="plate"><h3 id="rnPyr"></h3><p id="rdPyr"></p></span></button>
+      <button class="portal" data-style="sphere"><span class="bg" id="bgSph" style="background:radial-gradient(70% 55% at 32% 26%,#FBE9B4,transparent 62%),radial-gradient(90% 70% at 75% 78%,#C9992F,transparent 66%),linear-gradient(180deg,#D9A63A,#4A340A)"></span><span class="plate"><h3 id="rnSph"></h3><p id="rdSph"></p></span></button>
+      <button class="portal" data-style="garden"><span class="bg" id="bgGar" style="background:radial-gradient(60% 45% at 78% 18%,rgba(255,246,200,.9),transparent 60%),linear-gradient(180deg,#BFE3C4,#5FA36B 52%,#2C5A38)"></span><span class="plate"><h3 id="rnGar"></h3><p id="rdGar"></p></span></button>
+    </div>
+    <button class="chip" id="backHome" style="margin-top:16px"></button>
+  </div>
+
+  <!-- КОМНАТА -->
+  <div class="view" id="viewRoom">
+  <div class="sub"><span id="role">…</span> · <span id="peers"></span></div>
 
   <div class="card">
-    <div class="now"><b id="title">Трек не выбран</b><span id="state">—</span></div>
-    <input type="range" id="seek" min="0" max="100" value="0" aria-label="Позиция трека">
+    <div class="switch" id="hpSwitch" role="switch" aria-checked="false" tabindex="0">
+      <span class="track"><span class="knob"></span></span>
+      <span class="labels"><span class="on" id="hpNow"></span><span class="off" id="hpOther"></span></span>
+    </div>
+    <p class="mode-hint" id="hpHint"></p>
+  </div>
+
+  <div class="card">
+    <div class="now"><b id="title"></b><span id="state">—</span></div>
+    <input type="range" id="seek" min="0" max="100" value="0">
     <div class="time"><span id="cur">0:00</span><span id="rem">0:00</span></div>
-    <div class="transport"><button class="tbtn" id="play">▶</button></div>
+    <div class="transport">
+      <button class="tbtn" id="back15">−15</button>
+      <button class="tbtn main" id="play">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button class="tbtn main" id="pause">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <button class="tbtn" id="stop">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+      </button>
+      <button class="tbtn" id="fwd15">+15</button>
+    </div>
   </div>
 
   <div class="card">
-    <h3 style="font-size:19px;margin-bottom:8px">Пластинки</h3>
+    <h3 style="font-size:19px;margin-bottom:8px" id="tracksTitle"></h3>
     <div class="rail" id="tracks"></div>
-    <label class="upload" for="upload">Загрузить свой трек</label>
+    <label class="upload" for="upload" id="uploadLabel"></label>
     <input type="file" id="upload" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.aif,.aiff,.caf,.flac,.ogg,.oga,.opus,.mp4,.wma,.alac">
-    <p class="hint">Файл уходит на сервер и скачивается обоим до старта — только так возможен точный синхрон.</p>
+    <p class="hint" id="tracksHint"></p>
   </div>
 
   <div class="card notebook">
-    <h3>Тетрадь</h3>
+    <h3 id="chatTitle"></h3>
     <div id="chat"></div>
-    <input id="chatInput" placeholder="Написать и нажать Enter">
+    <input id="chatInput">
   </div>
 
   <div class="card bottom">
-    <button id="mic" aria-pressed="true" aria-label="Микрофон">🎙</button>
-    <div class="vol"><label>Музыка</label><input type="range" id="music" min="0" max="100" value="60"></div>
-    <div class="vol"><label>Собеседник</label><input type="range" id="voice" min="0" max="100" value="85"></div>
-    <span id="duck">Музыка приглушена</span>
+    <button id="mic" aria-pressed="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" stroke="none"/>
+        <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
+    </button>
+    <div class="vol"><label id="lblMusic"></label><input type="range" id="music" min="0" max="100" value="60"></div>
+    <div class="vol"><label id="lblVoice"></label><input type="range" id="voice" min="0" max="100" value="85"></div>
+    <span id="duck"></span>
   </div>
 
   <div class="card">
-    <h3 style="font-size:19px;margin-bottom:8px">Что происходит внутри</h3>
+    <h3 style="font-size:19px;margin-bottom:8px" id="diagTitle"></h3>
     <div id="diag"></div>
-    <p class="hint">Расхождение музыки — главное число. Ниже 20 мс человек не слышит разницы вообще.</p>
+    <p class="hint" id="diagHint"></p>
+  </div>
   </div>
 </div>
 
+<div class="sheet-back" id="inviteBack"><div class="sheet">
+  <h3 id="inviteTitle"></h3>
+  <p class="note" id="inviteNote"></p>
+  <a class="opt" id="optSms"><span class="ic">✉</span><span></span></a>
+  <a class="opt" id="optMail"><span class="ic">@</span><span></span></a>
+  <a class="opt" id="optWa" target="_blank" rel="noopener"><span class="ic">◍</span><span></span></a>
+  <button class="opt" id="optCopy"><span class="ic">⧉</span><span></span></button>
+  <button class="opt close" id="optClose"></button>
+</div></div>
+
 <audio id="remoteAudio" autoplay playsinline></audio>
 <div id="toast"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="i18n.js"></script>
+<script src="day.js"></script>
+<script src="scene.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

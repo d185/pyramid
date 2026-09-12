@@ -14,11 +14,111 @@ const fmt = s => (s < 0 ? '0:00' : Math.floor(s / 60) + ':' + String(Math.floor(
 
 const ui = {
   title: $('#title'), state: $('#state'), seek: $('#seek'), cur: $('#cur'), rem: $('#rem'),
-  play: $('#play'), tracks: $('#tracks'), chat: $('#chat'), chatInput: $('#chatInput'),
+  play: $('#play'), pause: $('#pause'), stop: $('#stop'), back15: $('#back15'), fwd15: $('#fwd15'),
+  tracks: $('#tracks'), chat: $('#chat'), chatInput: $('#chatInput'),
   mic: $('#mic'), music: $('#music'), voice: $('#voice'), role: $('#role'),
   peers: $('#peers'), duck: $('#duck'), diag: $('#diag'), invite: $('#invite'),
-  transfer: $('#transfer'), headphones: $('#headphones'), upload: $('#upload')
+  transfer: $('#transfer'), upload: $('#upload'), lang: $('#lang'),
+  hp: $('#hpSwitch'), hpNow: $('#hpNow'), hpOther: $('#hpOther'), hpHint: $('#hpHint'),
+  toRooms: $('#toRooms'), goRooms: $('#goRooms'), backHome: $('#backHome')
 };
+
+var roomStyle = 'pyramid';   // какая комната открыта у обоих
+
+/* ---------------- язык ---------------- */
+let lang = localStorage.getItem('pyr-lang') || 'en';
+if (!window.I18N[lang]) lang = 'en';
+
+function t(key, vars) {
+  let s = (window.I18N[lang] && window.I18N[lang][key]) || window.I18N.en[key] || key;
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+  return s;
+}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  localStorage.setItem('pyr-lang', lang);
+  $('#gateLead').textContent = t('gate.lead', { room: roomId });
+  $('#name').placeholder = t('gate.name');
+  $('#enter').textContent = t('gate.enter');
+  $('#gateMic').textContent = t('gate.mic');
+  ui.invite.textContent = t('btn.invite');
+  ui.transfer.textContent = isMaster ? t('btn.transfer') : t('btn.back');
+  $('#tracksTitle').textContent = t('tracks.title');
+  $('#uploadLabel').textContent = t('tracks.upload');
+  $('#tracksHint').textContent = t('tracks.hint');
+  $('#chatTitle').textContent = t('chat.title');
+  ui.chatInput.placeholder = t('chat.placeholder');
+  $('#lblMusic').textContent = t('vol.music');
+  $('#lblVoice').textContent = t('vol.voice');
+  ui.duck.textContent = t('duck.badge');
+  $('#diagTitle').textContent = t('diag.title');
+  $('#diagHint').textContent = t('diag.hint');
+  ui.back15.title = t('tr.back15'); ui.back15.setAttribute('aria-label', t('tr.back15'));
+  ui.play.title = t('tr.play'); ui.play.setAttribute('aria-label', t('tr.play'));
+  ui.pause.title = t('tr.pause'); ui.pause.setAttribute('aria-label', t('tr.pause'));
+  ui.stop.title = t('tr.stop'); ui.stop.setAttribute('aria-label', t('tr.stop'));
+  ui.fwd15.title = t('tr.fwd15'); ui.fwd15.setAttribute('aria-label', t('tr.fwd15'));
+  $('#inviteTitle').textContent = t('invite.title');
+  $('#inviteNote').textContent = t('invite.note');
+  $('#optSms').lastElementChild.textContent = t('invite.sms');
+  $('#optMail').lastElementChild.textContent = t('invite.email');
+  $('#optWa').lastElementChild.textContent = t('invite.whatsapp');
+  $('#optCopy').lastElementChild.textContent = t('invite.copy');
+  $('#optClose').textContent = t('invite.close');
+  $('#homeTag').textContent = t('home.tagline');
+  $('#homeLead').textContent = t('home.lead');
+  $('#goRooms').textContent = t('home.enter');
+  $('#roomsTitle').textContent = t('home.rooms');
+  $('#roomsHint').textContent = t('home.roomshint');
+  $('#backHome').textContent = t('home.back');
+  ui.toRooms.textContent = t('room.change');
+  $('#tHolTitle').textContent = t('home.holidays');
+  $('#tQuotesTitle').textContent = t('home.quotes');
+  [['Pyr', 'pyramid'], ['Sph', 'sphere'], ['Gar', 'garden']].forEach(function (p) {
+    $('#rn' + p[0]).textContent = t('room.' + p[1]);
+    $('#rd' + p[0]).textContent = t('room.' + p[1] + '.d');
+  });
+  $('#perks').innerHTML = ['perk.sync', 'perk.voice', 'perk.link', 'perk.walls']
+    .map(function (k) { return '<div class="perk"><span class="ic">◆</span><span>' + t(k) + '</span></div>'; }).join('');
+  renderToday();
+  renderMode();
+  if (!currentTrack) ui.title.textContent = t('player.none');
+  if (lastState) ui.state.textContent = t(lastState);
+  renderTracks();
+}
+
+function renderToday() {
+  var d = new Date();
+  $('#tDate').textContent = d.toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' });
+  var h = window.DAYS.pick(d, lang);
+  $('#tHol').innerHTML = h.list.map(function (x) {
+    return '<div><span class="dot">◆</span><span>' + x + '</span></div>';
+  }).join('');
+  $('#tQuotes').innerHTML = window.DAYS.twoQuotes(d, lang).map(function (q) {
+    return '<figure class="quote"><q>' + q.text + '</q><cite>' + q.who + '</cite></figure>';
+  }).join('');
+  if (weatherText) $('#tMeta').textContent = weatherText;
+}
+
+/* Погода по адресу: две открытые службы без ключей.
+   Если не отвечают — блок просто молчит, ломать из-за этого нечего. */
+var weatherText = '';
+function loadWeather() {
+  fetch('https://ipapi.co/json/').then(function (r) { return r.json(); }).then(function (p) {
+    if (!p || !p.latitude) throw 0;
+    return fetch('https://api.open-meteo.com/v1/forecast?latitude=' + p.latitude +
+      '&longitude=' + p.longitude + '&current=temperature_2m').then(function (r) { return r.json(); })
+      .then(function (w) {
+        var c = w && w.current ? Math.round(w.current.temperature_2m) : null;
+        weatherText = p.city ? (p.city + (c === null ? '' : ' · ' + (c > 0 ? '+' : '') + c + '°')) : '';
+        $('#tMeta').textContent = weatherText;
+      });
+  }).catch(function () { $('#tMeta').textContent = t('home.weatherfail'); });
+}
+
+let lastState = '';
+function setState(key) { lastState = key; ui.state.textContent = t(key); }
 
 /* ---------------- состояние ---------------- */
 let ws, selfId = null, masterId = null, roomId = null, isMaster = false;
@@ -68,26 +168,26 @@ function initAudio() {
 }
 
 async function loadTrack(trackId) {
-  const t = tracks.find(x => x.id === trackId);
-  if (!t) return;
-  currentTrack = t;
-  ui.title.textContent = t.title;
-  ui.state.textContent = 'загружаю';
+  const tr = tracks.find(x => x.id === trackId);
+  if (!tr) return;
+  currentTrack = tr;
+  ui.title.textContent = tr.title;
+  setState('state.loading');
   stopSource();
   buffer = null;
   try {
-    const res = await fetch(t.url);
+    const res = await fetch(tr.url);
     if (!res.ok) throw new Error('файл не отдался');
     const bytes = await res.arrayBuffer();
     buffer = await actx.decodeAudioData(bytes);
   } catch (e) {
     buffer = null;
-    ui.state.textContent = 'формат не открылся';
-    toast('Это устройство не умеет открывать такой файл');
-    ws.send(JSON.stringify({ type: 'note', text: 'не смог открыть «' + t.title + '», нужен другой формат' }));
+    setState('state.badformat');
+    toast(t('toast.badformat'));
+    ws.send(JSON.stringify({ type: 'note', text: t('note.badformat', { title: tr.title }) }));
     return;
   }
-  ui.state.textContent = 'готов, жду второго';
+  setState('state.ready');
   ws.send(JSON.stringify({ type: 'ready', trackId }));
 }
 
@@ -113,9 +213,8 @@ function startAt(startAtServer, offset) {
   source.start(when, off);
   startCtx = when; posAtStart = off; lastCtx = when; pos = off; rate = 1;
   playing = true;
-  ui.play.textContent = '❚❚';
-  ui.state.textContent = 'играет';
-  source.onended = () => { if (playing && pos >= buffer.duration - 0.3) { playing = false; ui.play.textContent = '▶'; ui.state.textContent = 'кончился'; } };
+  setState('state.playing');
+  source.onended = () => { if (playing && pos >= buffer.duration - 0.3) { playing = false; setState('state.ended'); } };
 }
 
 /* Задержка вывода у каждого устройства своя: у Мака одна, у телефона другая.
@@ -153,6 +252,8 @@ setInterval(() => {
 
 /* полоса прокрутки и время */
 setInterval(() => {
+  var c = $('#tClock');
+  if (c) c.textContent = new Date().toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
   if (!buffer) return;
   const p = playing ? pos : serverOffset;
   if (!seeking) ui.seek.value = Math.min(100, (p / buffer.duration) * 100);
@@ -181,8 +282,10 @@ async function getMic() {
   const constraints = {
     audio: {
       // в наушниках эхоподавление только вредит голосу, без него звук шире
+      // портит голос именно эхоподавление, поэтому в наушниках снимаем его
+      // и автогромкость, а подавление шума оставляем — оно полезно всегда
       echoCancellation: !headphones,
-      noiseSuppression: !headphones,
+      noiseSuppression: true,
       autoGainControl: !headphones,
       channelCount: 1
     }, video: false
@@ -241,7 +344,7 @@ function makePeer() {
     } catch (e) { console.warn('предложение', e); } finally { makingOffer = false; }
   };
   pc.oniceconnectionstatechange = () => {
-    if (pc.iceConnectionState === 'failed') { toast('Связь просела, поднимаю заново'); pc.restartIce(); }
+    if (pc.iceConnectionState === 'failed') { toast(t('toast.icefail')); pc.restartIce(); }
     if (pc.iceConnectionState === 'disconnected') setTimeout(() => {
       if (pc && pc.iceConnectionState === 'disconnected') pc.restartIce();
     }, 2500);
@@ -358,7 +461,7 @@ function connect() {
 
   ws.onopen = () => {
     reconnectDelay = 500;
-    ws.send(JSON.stringify({ type: 'hello', room: roomId, name: localStorage.getItem('pyr-name') || 'Гость' }));
+    ws.send(JSON.stringify({ type: 'hello', room: roomId, style: roomStyle, name: localStorage.getItem('pyr-name') || t('name.guest') }));
     for (let i = 0; i < 8; i++) setTimeout(ping, i * 120);   // быстрая первичная настройка часов
   };
 
@@ -369,6 +472,11 @@ function connect() {
 
       case 'welcome':
         selfId = m.selfId; masterId = m.masterId; tracks = m.tracks;
+        if (m.state.style && m.state.style !== roomStyle) {
+          roomStyle = m.state.style;
+          if (document.body.classList.contains('in-room') && window.Scene.supported())
+            window.Scene.enter(roomStyle, $('#gl'));
+        }
         renderTracks(); renderRole(m.peers);
         m.chat.forEach(addChat);
         // голос поднимаем ДО загрузки трека: иначе предложение собеседника
@@ -394,7 +502,12 @@ function connect() {
         peerSpeaking = false; applyDuck();
         break;
 
-      case 'note': addChat({ from: 'система', text: m.text }); break;
+      case 'note': addChat({ from: t('chat.system'), text: m.text }); break;
+
+      case 'style':
+        roomStyle = m.style;
+        if (window.Scene.supported()) window.Scene.enter(roomStyle, $('#gl'));
+        break;
 
       case 'signal': enqueueSignal(m); break;
       case 'tracks': tracks = m.tracks; renderTracks(); break;
@@ -405,7 +518,7 @@ function connect() {
         break;
       case 'paused':
         stopSource(); serverOffset = m.offset; pos = m.offset;
-        ui.play.textContent = '▶'; ui.state.textContent = 'пауза';
+        setState(m.offset > 0.05 ? 'state.paused' : 'state.stopped');
         break;
       case 'speaking': peerSpeaking = m.on; applyDuck(); break;
       case 'chat': addChat(m.msg); break;
@@ -414,9 +527,7 @@ function connect() {
   };
 
   ws.onclose = () => {
-    ui.state.textContent = reconnectDelay < 3000
-      ? 'связь потеряна, соединяюсь заново'
-      : 'сервер просыпается, это занимает до минуты';
+    setState(reconnectDelay < 3000 ? 'state.lost' : 'state.waking');
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(8000, reconnectDelay * 1.7);
   };
@@ -432,7 +543,7 @@ function renderTracks() {
     b.innerHTML = '<span class="art"></span><span class="cap">' + t.title + '</span>';
     if (currentTrack && t.id === currentTrack.id) b.setAttribute('aria-current', 'true');
     b.onclick = () => {
-      if (!isMaster) return toast('Музыку ведёт Мастер');
+      if (needMaster()) return;
       ws.send(JSON.stringify({ type: 'select', trackId: t.id }));
     };
     ui.tracks.appendChild(b);
@@ -441,11 +552,13 @@ function renderTracks() {
 
 function renderRole(peers) {
   isMaster = selfId === masterId;
-  ui.role.textContent = isMaster ? 'Вы Мастер' : 'Вы Гость — музыку ведёт Мастер';
-  ui.peers.textContent = peers.length > 1 ? 'в комнате двое' : 'вы один, ждём гостя';
+  ui.role.textContent = isMaster ? t('role.master') : t('role.guest');
+  ui.peers.textContent = peers.length > 1 ? t('peers.two') : t('peers.alone');
+  ui.transfer.textContent = t('btn.transfer');
   document.body.classList.toggle('guest', !isMaster);
   ui.seek.disabled = !isMaster;
   ui.transfer.style.display = isMaster && peers.length > 1 ? '' : 'none';
+  if (document.body.classList.contains('in-room')) ui.toRooms.style.display = isMaster ? '' : 'none';
 }
 
 function addChat(msg) {
@@ -470,38 +583,99 @@ ui.seek.addEventListener('change', () => {
   ws.send(JSON.stringify({ type: 'seek', offset: (ui.seek.value / 100) * buffer.duration }));
 });
 
+function needMaster() {
+  if (isMaster) return false;
+  toast(t('toast.masterleads'));
+  return true;
+}
+/* Перемотка: если играет — двигаем и продолжаем, если стоит — просто
+   переставляем метку, чтобы кнопка не заводила музыку исподтишка. */
+function jump(sec) {
+  if (needMaster() || !buffer) return;
+  const from = playing ? pos : serverOffset;
+  const to = Math.max(0, Math.min(buffer.duration - 0.2, from + sec));
+  if (playing) ws.send(JSON.stringify({ type: 'seek', offset: to }));
+  else ws.send(JSON.stringify({ type: 'pause', offset: to }));
+}
+
 ui.play.onclick = () => {
-  if (!isMaster) return toast('Музыку ведёт Мастер');
-  if (playing) ws.send(JSON.stringify({ type: 'pause', offset: pos }));
-  else ws.send(JSON.stringify({ type: 'resume' }));
+  if (needMaster()) return;
+  if (playing) return;
+  ws.send(JSON.stringify({ type: 'resume' }));
 };
+ui.pause.onclick = () => {
+  if (needMaster() || !playing) return;
+  ws.send(JSON.stringify({ type: 'pause', offset: pos }));
+};
+ui.stop.onclick = () => {
+  if (needMaster()) return;
+  ws.send(JSON.stringify({ type: 'pause', offset: 0 }));
+};
+ui.back15.onclick = () => jump(-15);
+ui.fwd15.onclick = () => jump(15);
+
+/* кнопки гаснут, когда нажимать нечего */
+setInterval(() => {
+  const can = isMaster && !!buffer;
+  ui.play.disabled = !can || playing;
+  ui.pause.disabled = !can || !playing;
+  ui.stop.disabled = !can;
+  ui.back15.disabled = !can;
+  ui.fwd15.disabled = !can;
+}, 300);
 
 ui.music.oninput = () => { if (musicGain) musicGain.gain.value = +ui.music.value / 100; };
 ui.voice.oninput = () => { remoteAudio.volume = +ui.voice.value / 100; };
 
 ui.mic.onclick = () => {
   micOn = !micOn;
-  if (localStream) localStream.getAudioTracks().forEach(t => (t.enabled = micOn));
+  if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
   ui.mic.setAttribute('aria-pressed', micOn ? 'true' : 'false');
   if (!micOn && selfSpeaking) setSelfSpeaking(false);
-  toast(micOn ? 'Микрофон включён' : 'Микрофон выключен — музыка в полном качестве');
+  toast(micOn ? t('toast.micon') : t('toast.micoff'));
 };
 
-ui.headphones.onclick = async () => {
+function renderMode() {
+  ui.hp.setAttribute('aria-checked', headphones ? 'true' : 'false');
+  ui.hpNow.textContent = headphones ? t('mode.headphones') : t('mode.speaker');
+  ui.hpOther.textContent = headphones ? t('mode.speaker') : t('mode.headphones');
+  ui.hpHint.textContent = t('mode.hint');
+}
+async function toggleMode() {
   headphones = !headphones;
-  ui.headphones.setAttribute('aria-pressed', headphones ? 'true' : 'false');
-  ui.headphones.textContent = headphones ? 'Я в наушниках' : 'Я на динамике';
+  renderMode();
   try { await getMic(); } catch (e) { }
-  toast(headphones ? 'Эхоподавление выключено, голос шире' : 'Эхоподавление включено');
-};
+  toast(headphones ? t('toast.headphones') : t('toast.speaker'));
+}
+ui.hp.onclick = toggleMode;
+ui.hp.onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleMode(); } };
+
+ui.lang.onchange = () => { lang = ui.lang.value; applyLang(); };
 
 ui.transfer.onclick = () => ws.send(JSON.stringify({ type: 'transfer' }));
 
-ui.invite.onclick = async () => {
-  const link = location.origin + '/?room=' + encodeURIComponent(roomId);
-  try { await navigator.clipboard.writeText(link); toast('Ссылка скопирована'); }
-  catch (e) { prompt('Ссылка для гостя', link); }
+function inviteLink() { return location.origin + '/?room=' + encodeURIComponent(roomId); }
+
+ui.invite.onclick = () => {
+  const link = inviteLink(), text = t('invite.text', { link });
+  const isApple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent);
+  // у Apple разделитель в ссылке sms другой, иначе текст просто не подставится
+  $('#optSms').href = 'sms:' + (isApple ? '&' : '?') + 'body=' + encodeURIComponent(text);
+  $('#optMail').href = 'mailto:?subject=' + encodeURIComponent(t('invite.subject')) + '&body=' + encodeURIComponent(text);
+  $('#optWa').href = 'https://wa.me/?text=' + encodeURIComponent(text);
+  $('#inviteBack').classList.add('on');
 };
+$('#optCopy').onclick = async () => {
+  const link = inviteLink();
+  try { await navigator.clipboard.writeText(link); toast(t('toast.copied')); }
+  catch (e) { prompt('', link); }
+  $('#inviteBack').classList.remove('on');
+};
+$('#optClose').onclick = () => $('#inviteBack').classList.remove('on');
+$('#inviteBack').onclick = e => { if (e.target === $('#inviteBack')) $('#inviteBack').classList.remove('on'); };
+['#optSms', '#optMail', '#optWa'].forEach(id => {
+  $(id).addEventListener('click', () => setTimeout(() => $('#inviteBack').classList.remove('on'), 300));
+});
 
 ui.chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && ui.chatInput.value.trim()) {
@@ -513,20 +687,20 @@ ui.chatInput.addEventListener('keydown', e => {
 ui.upload.onchange = () => {
   const f = ui.upload.files[0];
   if (!f) return;
-  if (f.size > 80e6) return toast('Файл больше 80 МБ, не потяну');
+  if (f.size > 80e6) return toast(t('toast.uploadbig'));
   // XHR, а не fetch: только он показывает ход загрузки на телефоне
   const x = new XMLHttpRequest();
   x.open('POST', '/api/upload?name=' + encodeURIComponent(f.name));
   x.upload.onprogress = e => {
-    if (e.lengthComputable) toast('Отправляю ' + Math.round(e.loaded / e.total * 100) + '%');
+    if (e.lengthComputable) toast(t('toast.uploading', { p: Math.round(e.loaded / e.total * 100) }));
   };
   x.onload = () => {
-    if (x.status !== 200) return toast('Не приняли файл: ' + (x.responseText || x.status));
-    let j; try { j = JSON.parse(x.responseText); } catch (e) { return toast('Странный ответ сервера'); }
-    toast('Готово, трек в списке');
+    if (x.status !== 200) return toast(t('toast.uploadfail', { e: x.responseText || x.status }));
+    let j; try { j = JSON.parse(x.responseText); } catch (e) { return toast(t('toast.oddanswer')); }
+    toast(t('toast.uploaded'));
     if (isMaster) ws.send(JSON.stringify({ type: 'select', trackId: j.id }));
   };
-  x.onerror = () => toast('Связь оборвалась при загрузке');
+  x.onerror = () => toast(t('toast.uploaderr'));
   x.send(f);
   ui.upload.value = '';
 };
@@ -547,33 +721,112 @@ setInterval(async () => {
     } catch (e) { }
   }
   const rows = [
-    ['часы с сервером', (clock.offset >= 0 ? '+' : '') + Math.round(clock.offset) + ' мс, круг ' + clock.rtt + ' мс'],
-    ['расхождение музыки', (drift * 1000).toFixed(1) + ' мс'],
-    ['правок темпа', corrections + ', перезаводов ' + hardResyncs],
-    ['голос', pc ? (pc.iceConnectionState + ', круг ' + stats.rtt + ' мс, дрожание ' + stats.jitter + ' мс, потери ' + stats.loss) : 'нет собеседника'],
-    ['кандидаты связи', !pc ? '—' : ('отправлено ' + iceSent + ', принято ' + iceGot + (iceDropped ? ', отвергнуто ' + iceDropped : '') + (pendingCandidates.length ? ', ждут ' + pendingCandidates.length : ''))],
-    ['поток собеседника', !pc ? '—' : (gotRemote ? (remoteAudio.paused ? 'пришёл, но не играет' : 'играет') : 'ещё не пришёл')],
-    ['я', pc ? (isInitiator ? 'звоню' : 'отвечаю') : '—'],
-    ['эхоподавление', headphones ? 'выключено (наушники)' : 'включено (динамик)']
+    [t('diag.clock'), (clock.offset >= 0 ? '+' : '') + Math.round(clock.offset) + ' ms, ' + t('diag.round') + ' ' + clock.rtt + ' ms'],
+    [t('diag.drift'), (drift * 1000).toFixed(1) + ' ms'],
+    [t('diag.corr'), corrections + ', ' + t('diag.resets') + ' ' + hardResyncs],
+    [t('diag.voice'), pc ? (pc.iceConnectionState + ', ' + t('diag.round') + ' ' + stats.rtt + ' ms, ' + t('diag.jitter') + ' ' + stats.jitter + ' ms, ' + t('diag.loss') + ' ' + stats.loss) : t('diag.nopeer')],
+    [t('diag.ice'), !pc ? '—' : (t('diag.sent') + ' ' + iceSent + ', ' + t('diag.got') + ' ' + iceGot
+        + (iceDropped ? ', ' + t('diag.rejected') + ' ' + iceDropped : '')
+        + (pendingCandidates.length ? ', ' + t('diag.holding') + ' ' + pendingCandidates.length : ''))],
+    [t('diag.stream'), !pc ? '—' : (gotRemote ? (remoteAudio.paused ? t('diag.streamsilent') : t('diag.streamplays')) : t('diag.streamnone'))],
+    [t('diag.me'), pc ? (isInitiator ? t('diag.calling') : t('diag.answering')) : '—'],
+    [t('diag.aec'), headphones ? t('diag.aecoff') : t('diag.aecon')]
   ];
   ui.diag.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
 }, 1000);
 
+/* ---------------- экраны ---------------- */
+function showView(name) {
+  ['Home', 'Rooms', 'Room'].forEach(function (v) {
+    $('#view' + v).classList.toggle('on', v.toLowerCase() === name);
+  });
+  const inRoom = name === 'room';
+  document.body.classList.toggle('in-room', inRoom);
+  ui.toRooms.style.display = inRoom && isMaster ? '' : 'none';
+  ui.invite.style.display = inRoom ? '' : 'none';
+  if (!inRoom) window.Scene.dispose();
+  window.scrollTo(0, 0);
+}
+
+/* Анализатор висит на выходе музыки: стены разгораются от того же звука,
+   который слышит человек, а не от выдуманного ритма. */
+let analyser = null, levelData = null;
+function attachAnalyser() {
+  if (!actx || analyser) return;
+  analyser = actx.createAnalyser();
+  analyser.fftSize = 512;
+  analyser.smoothingTimeConstant = .75;
+  duckGain.connect(analyser);          // ветка только на замер, в динамики не идёт
+  levelData = new Uint8Array(analyser.fftSize);
+}
+setInterval(() => {
+  if (!analyser || !window.Scene) return;
+  analyser.getByteTimeDomainData(levelData);
+  let sum = 0;
+  for (let i = 0; i < levelData.length; i++) { const v = (levelData[i] - 128) / 128; sum += v * v; }
+  const rms = Math.sqrt(sum / levelData.length);
+  window.Scene.setLevel(Math.min(1, rms * 3.2));
+  window.Scene.setPlaying(playing);
+}, 60);
+
+async function enterRoom(style) {
+  roomStyle = style || roomStyle;
+  showView('room');
+  if (window.Scene.supported()) window.Scene.enter(roomStyle, $('#gl'));
+  attachAnalyser();
+  if (ws && ws.readyState === 1) {
+    if (isMaster) ws.send(JSON.stringify({ type: 'style', style: roomStyle }));
+  } else if (!ws) {
+    connect();
+  }
+}
+
+ui.goRooms.onclick = () => showView('rooms');
+$('#backHome').onclick = () => showView('home');
+ui.toRooms.onclick = () => { if (isMaster) showView('rooms'); };
+document.querySelectorAll('[data-style]').forEach(b => {
+  b.onclick = async () => {
+    const style = b.dataset.style;
+    if (!actx) { await unlock(); }
+    enterRoom(style);
+  };
+});
+
 /* ---------------- вход ---------------- */
-$('#enter').onclick = async () => {
-  const name = $('#name').value.trim() || 'Гость';
+async function unlock() {
+  const name = $('#name').value.trim() || t('name.guest');
   localStorage.setItem('pyr-name', name);
   try {
     initAudio();
     await actx.resume();
     await getMic();
   } catch (e) {
-    toast('Без микрофона голосовая связь не поднимется');
+    toast(t('gate.nomic'));
   }
+  attachAnalyser();
+  try { cfg = await (await fetch('/api/config')).json(); } catch (e) { }
+}
+
+$('#enter').onclick = async () => {
   $('#gate').classList.add('gone');
-  fetch('/api/config').then(r => r.json()).then(c => { cfg = c; connect(); });
+  await unlock();
+  // пришли по ссылке-приглашению — сразу в комнату, минуя витрину
+  if (invitedDirectly) { connect(); enterRoom(roomStyle); }
+  else { showView('home'); loadWeather(); }
 };
 
-roomId = new URL(location).searchParams.get('room') || Math.random().toString(36).slice(2, 8);
+const askedRoom = new URL(location).searchParams.get('room');
+const invitedDirectly = !!askedRoom;
+roomId = askedRoom || Math.random().toString(36).slice(2, 8);
 history.replaceState(null, '', '/?room=' + roomId);
-$('#roomName').textContent = roomId;
+
+window.LANGS.forEach(l => {
+  const o = document.createElement('option');
+  o.value = l.code; o.textContent = l.name;
+  if (l.code === lang) o.selected = true;
+  ui.lang.appendChild(o);
+});
+$('#name').value = localStorage.getItem('pyr-name') || '';
+applyLang();
+if (!invitedDirectly) loadWeather();
+setInterval(renderToday, 60000);

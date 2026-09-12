@@ -193,6 +193,187 @@ body.in-room .notebook{background:linear-gradient(178deg,rgba(244,235,212,.94),r
 .portal h3{font-size:23px}
 .portal p{font-size:13px;color:#A9C4B8;margin-top:3px}
 .portal:hover{border-color:var(--gold-300)}
+
+/* ================= КОМНАТА: одна панель посередине ================= */
+body.in-room .wrap{max-width:none;padding:0;height:100vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center}
+body.in-room .top{position:fixed;top:0;left:0;right:0;margin:0;padding:8px 12px;z-index:6;
+  background:linear-gradient(180deg,rgba(3,12,9,.72),transparent)}
+body.in-room .brand{font-size:19px}
+body.in-room .card{background:none;border:none;padding:0;margin:0}
+
+.room-bar{position:fixed;top:46px;left:50%;transform:translateX(-50%);z-index:6;
+  display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:99px;
+  background:rgba(6,22,15,.55);border:1px solid rgba(246,231,184,.22);backdrop-filter:blur(14px);
+  max-width:calc(100vw - 20px)}
+.rb-room{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#BCD5C8;padding:0 6px;white-space:nowrap}
+.rb-room .dot{width:7px;height:7px;border-radius:50%;background:var(--jade);box-shadow:0 0 8px var(--jade)}
+.rb-room .dot.solo{background:#7d8f88;box-shadow:none}
+.rb-sep{width:1px;height:18px;background:rgba(255,255,255,.16)}
+.rb-hint{position:fixed;top:86px;left:50%;transform:translateX(-50%);z-index:5;max-width:min(420px,92vw);
+  text-align:center;font-size:11.5px;color:#7FA294;line-height:1.4;opacity:0;transition:.25s;pointer-events:none}
+.rb-hint.on{opacity:1}
+
+.ib{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:99px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#E7F2EB;font-size:12.5px}
+.ib:hover{border-color:var(--gold-300)}
+.ib-ic{font-size:14px;line-height:1}
+.ib[aria-checked="true"],.ib[aria-pressed="true"]{border-color:var(--jade);color:#CFF6E6}
+#micBtn[aria-pressed="false"]{opacity:.45}
+
+/* пульт */
+.console{width:min(360px,calc(100vw - 24px));position:relative;z-index:4;
+  padding:14px 14px 12px;border-radius:14px;
+  background:linear-gradient(180deg,rgba(8,30,21,.60),rgba(3,14,10,.74));
+  border:1px solid rgba(246,231,184,.22);backdrop-filter:blur(16px);
+  box-shadow:0 30px 70px -34px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,246,216,.14)}
+.cs-now{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.cs-now b{font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cs-now span{font-size:11.5px;color:#9CBBAD;white-space:nowrap}
+#seek{width:100%;accent-color:var(--gold-500);margin:8px 0 0;height:18px}
+#seek:disabled{opacity:.35}
+.cs-time{display:flex;justify-content:space-between;font-size:10.5px;color:#8FB5A5}
+.cs-row{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:10px}
+.cs-row.two{gap:8px}
+.cs-row.vols{justify-content:flex-start;margin-top:10px;gap:6px;position:relative}
+.cb{height:36px;min-width:36px;padding:0 9px;border-radius:99px;cursor:pointer;font-size:11.5px;
+  border:1px solid rgba(246,231,184,.3);background:rgba(255,255,255,.05);color:#EFE6CE;
+  display:grid;place-items:center}
+.cb:hover{border-color:var(--gold-300)}
+.cb:disabled{opacity:.28;cursor:not-allowed}
+.cb svg{width:15px;height:15px}
+.cb.big{width:42px;height:42px;min-width:42px;border:none;color:#241A06;
+  background:radial-gradient(circle at 36% 30%,var(--gold-100),var(--gold-300) 42%,var(--gold-500))}
+.cb.big:disabled{background:rgba(255,255,255,.08);color:#9CBBAD}
+.cb.big svg{width:16px;height:16px}
+
+/* выпадающие меню */
+.drop{position:relative;flex:1}
+.drop.up{flex:none}
+.db{width:100%;height:34px;display:flex;align-items:center;justify-content:center;gap:7px;
+  border-radius:8px;cursor:pointer;font-size:12px;
+  border:1px solid rgba(246,231,184,.26);background:rgba(255,255,255,.05);color:#EBDCB6}
+.db:hover{border-color:var(--gold-300)}
+.db span:first-child{color:var(--gold-300)}
+.menu{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+  max-height:44vh;overflow:auto;padding:6px;border-radius:10px;
+  background:rgba(5,20,14,.96);border:1px solid rgba(246,231,184,.28);backdrop-filter:blur(14px);
+  box-shadow:0 20px 50px -20px rgba(0,0,0,.95)}
+.drop.up .menu{top:auto;bottom:calc(100% + 8px);left:-6px;right:auto;width:200px}
+.drop.open .menu{display:block}
+.menu .gh{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-500);padding:7px 8px 3px}
+.mi{display:block;width:100%;text-align:left;padding:9px 10px;border:none;border-radius:6px;cursor:pointer;
+  background:none;color:#DCEAE1;font-size:12.5px;line-height:1.3}
+.mi:hover{background:rgba(255,255,255,.08)}
+.mi[aria-current="true"]{color:var(--gold-100);background:rgba(224,200,120,.14)}
+.mi.empty{color:#7FA294;cursor:default}
+.mi.empty:hover{background:none}
+.mi-url{display:none;gap:6px;padding:6px}
+.mi-url.on{display:flex}
+.mi-url input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
+  border-radius:6px;padding:7px 8px;color:#E7F2EB;font-size:12px}
+.mi-url button{border:none;border-radius:6px;padding:0 11px;cursor:pointer;
+  background:var(--gold-300);color:#241A06}
+.menu.slider{padding:10px 12px}
+.menu.slider label{display:block;font-size:11px;color:#B7D0C4;margin-bottom:6px}
+.menu.slider input{width:100%;accent-color:var(--jade)}
+
+/* чат внутри пульта */
+.cs-chat{margin-top:10px;border-radius:8px;padding:8px 10px;cursor:pointer;
+  background:linear-gradient(178deg,rgba(244,235,212,.93),rgba(226,213,182,.93));color:var(--ink)}
+#chat{max-height:56px;overflow:hidden;transition:max-height .25s;
+  background-image:repeating-linear-gradient(180deg,transparent 0 25px,rgba(58,50,34,.14) 25px 26px)}
+.cs-chat.open #chat{max-height:150px;overflow-y:auto}
+.msg{font-family:var(--serif);font-size:15px;line-height:26px}
+.msg b{font-weight:600}
+#chatInput{display:none;width:100%;margin-top:6px;background:rgba(58,50,34,.08);
+  border:1px solid rgba(58,50,34,.26);border-radius:6px;padding:6px 8px;color:var(--ink);font-size:13px}
+.cs-chat.open #chatInput{display:block}
+#duck{margin-left:auto;font-size:10.5px;color:#241A06;background:var(--gold-300);
+  border-radius:99px;padding:4px 9px;opacity:0;transition:.2s;white-space:nowrap}
+#duck.on{opacity:1}
+
+/* диагностика — по кнопке i */
+.diag-sheet{display:none;position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:8;
+  width:min(380px,calc(100vw - 24px));padding:14px;border-radius:12px;
+  background:rgba(4,18,12,.94);border:1px solid rgba(246,231,184,.24);backdrop-filter:blur(14px)}
+.diag-sheet.on{display:block}
+#diag{font-size:11.5px;color:#8FB5A5;display:grid;gap:4px}
+#diag div{display:flex;justify-content:space-between;gap:10px}
+#diag b{color:#CFE3D8;font-weight:500;text-align:right}
+
+@media (max-width:430px){
+  .room-bar{gap:4px;padding:5px 6px}
+  .ib{height:30px;padding:0 8px;font-size:11.5px}
+  .ib-tx{display:none}
+  .rb-room{font-size:11.5px;padding:0 4px}
+}
+
+/* ================= ГЛАВНАЯ ================= */
+.hero{position:relative;min-height:min(88vh,780px);display:grid;place-items:center;
+  overflow:hidden;text-align:center;padding:70px 18px 50px;
+  border-bottom:1px solid rgba(246,231,184,.18)}
+.hero-marble{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;
+  filter:saturate(1.05);animation:drift 46s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1.04)}to{transform:translate3d(2%,1%,0) scale(1.12)}}
+.hero-veil{position:absolute;inset:0;
+  background:radial-gradient(70% 55% at 50% 42%,rgba(2,14,9,.42),rgba(2,12,8,.86) 78%),
+    linear-gradient(180deg,rgba(2,12,8,.6),transparent 30%,rgba(2,12,8,.92))}
+.hero-inner{position:relative;z-index:2;max-width:620px}
+.hero-logo{position:relative;display:grid;place-items:center;margin-bottom:18px;
+  transition:transform .4s cubic-bezier(.2,.8,.2,1)}
+.hero-logo .pyr{--s:min(190px,42vw)}
+.halo{position:absolute;width:140%;aspect-ratio:1;border-radius:50%;pointer-events:none;
+  background:radial-gradient(closest-side,rgba(246,231,184,.22),transparent 70%);
+  animation:pulse 7s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(.9);opacity:.55}50%{transform:scale(1.1);opacity:1}}
+.hero-title{font-size:clamp(44px,11vw,86px);letter-spacing:.09em;line-height:1;
+  background:linear-gradient(180deg,#FFF8E2,#E3C878 55%,#A8801F);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.hero-tag{font-family:var(--serif);font-size:clamp(19px,4vw,26px);color:#CFE3D8;margin-top:10px}
+.hero-lead{color:#9CBBAD;font-size:15px;line-height:1.65;margin:16px auto 26px;max-width:460px}
+.cta{border:none;cursor:pointer;padding:14px 30px;border-radius:99px;font-weight:600;font-size:15px;
+  color:#241A06;background:linear-gradient(140deg,#FFF3CF,var(--gold-300) 45%,var(--gold-500));
+  box-shadow:0 14px 40px -14px rgba(224,200,120,.75);transition:transform .18s,box-shadow .18s}
+.cta:hover{transform:translateY(-2px);box-shadow:0 20px 48px -14px rgba(224,200,120,.9)}
+.cta.wide{width:min(360px,100%)}
+.scroll-cue{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:2;
+  font-size:24px;color:rgba(246,231,184,.5);animation:bob 2.6s ease-in-out infinite}
+@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,7px)}}
+
+.wrap-in{max-width:620px;margin:0 auto;padding:34px 18px 60px;display:grid;gap:34px}
+.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s,transform .7s}
+.reveal.seen{opacity:1;transform:none}
+.reveal.center{text-align:center}
+.slab{position:relative;padding:22px;border-radius:10px;overflow:hidden;
+  background:linear-gradient(155deg,rgba(12,58,40,.55),rgba(4,22,15,.72));
+  border:1px solid rgba(246,231,184,.2)}
+.slab::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(120% 80% at 18% 0%,rgba(246,231,184,.12),transparent 60%)}
+.slab-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.slab-date{font-family:var(--serif);font-size:clamp(22px,5vw,30px)}
+.slab-clock{font-family:var(--serif);font-size:clamp(22px,5vw,30px);color:var(--gold-300)}
+.slab-meta{font-size:13.5px;color:#8FB5A5;margin-top:4px}
+.slab-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-500)}
+.vein-rule{height:1px;border:0;margin:16px 0;
+  background:linear-gradient(90deg,transparent,var(--gold-500),transparent);opacity:.55}
+.hol{display:grid;gap:9px;font-size:14.5px;margin-top:10px}
+.hol div{display:flex;gap:10px;align-items:baseline}
+.hol .dot{color:var(--gold-500);font-size:10px}
+.quote{border-left:2px solid var(--gold-500);padding:4px 0 4px 18px;margin-bottom:18px}
+.quote q{font-family:var(--serif);font-style:italic;font-size:clamp(19px,3.6vw,24px);line-height:1.4;quotes:'«' '»'}
+.quote cite{display:block;margin-top:8px;font-style:normal;font-size:12.5px;color:#8FB5A5}
+.perks{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.perk{font-size:13.5px;color:#9CBBAD;line-height:1.5;padding:14px;border-radius:8px;
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
+.perk .ic{display:block;color:var(--gold-300);font-size:15px;margin-bottom:7px}
+@media (max-width:520px){.perks{grid-template-columns:1fr}}
+
+/* порталы комнат */
+.portals{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.portal{min-height:230px;border-radius:130px 130px 8px 8px;transition:transform .22s,border-color .22s}
+.portal:hover{transform:translateY(-4px)}
+@media (max-width:640px){.portals{grid-template-columns:1fr}.portal{min-height:180px;border-radius:100px 100px 8px 8px}}
 </style>
 </head>
 <body>
@@ -220,34 +401,50 @@ body.in-room .notebook{background:linear-gradient(178deg,rgba(244,235,212,.94),r
 
   <!-- ГЛАВНАЯ -->
   <div class="view on" id="viewHome">
-    <div class="hero">
-      <div>
-        <h1>Pyramid</h1>
-        <div class="tag" id="homeTag"></div>
-        <p id="homeLead"></p>
+    <section class="hero">
+      <canvas class="hero-marble" id="heroMarble"></canvas>
+      <div class="hero-veil"></div>
+      <div class="hero-inner">
+        <div class="hero-logo" id="heroLogo">
+          <div class="pyr-stage"><div class="pyr" id="logoBig">
+            <div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1.2" opacity=".92"><path d="M50 4 C44 34 58 56 46 100"/><path d="M50 4 C62 40 40 70 66 100"/><path d="M52 22 C68 44 74 72 82 100"/></g></svg></div>
+            <div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1" opacity=".8"><path d="M50 6 C40 44 62 64 40 100"/></g></svg></div>
+            <div class="face"></div><div class="face"></div>
+          </div></div>
+          <div class="halo"></div>
+        </div>
+        <h1 class="hero-title">Pyramid</h1>
+        <div class="hero-tag" id="homeTag"></div>
+        <p class="hero-lead" id="homeLead"></p>
+        <button class="cta" id="goRooms"></button>
       </div>
-      <div class="pyr-stage"><div class="pyr" id="logoBig"><div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1.2" opacity=".9"><path d="M50 4 C44 34 58 56 46 100"/><path d="M50 4 C62 40 40 70 66 100"/><path d="M52 22 C68 44 74 72 82 100"/></g></svg></div><div class="face"><svg viewBox="0 0 100 103" preserveAspectRatio="none"><g fill="none" stroke="#F2DFA4" stroke-width="1" opacity=".8"><path d="M50 6 C40 44 62 64 40 100"/></g></svg></div><div class="face"></div><div class="face"></div></div></div>
-    </div>
+      <div class="scroll-cue">⌄</div>
+    </section>
 
-    <div class="card today-grid">
-      <div class="today-head">
-        <span class="today-date" id="tDate"></span>
-        <span class="today-clock" id="tClock">—:—</span>
-      </div>
-      <div class="today-meta" id="tMeta"></div>
-      <hr class="vein-rule">
-      <div class="today-meta" id="tHolTitle"></div>
-      <div class="hol" id="tHol"></div>
-    </div>
+    <div class="wrap-in">
+      <section class="reveal slab">
+        <div class="slab-head">
+          <span class="slab-date" id="tDate"></span>
+          <span class="slab-clock" id="tClock">—:—</span>
+        </div>
+        <div class="slab-meta" id="tMeta"></div>
+        <hr class="vein-rule">
+        <div class="slab-label" id="tHolTitle"></div>
+        <div class="hol" id="tHol"></div>
+      </section>
 
-    <div class="card">
-      <div class="today-meta" id="tQuotesTitle" style="margin-bottom:10px"></div>
-      <div id="tQuotes"></div>
-    </div>
+      <section class="reveal">
+        <div class="slab-label" id="tQuotesTitle" style="margin-bottom:12px"></div>
+        <div id="tQuotes"></div>
+      </section>
 
-    <div class="card">
-      <div class="perks" id="perks"></div>
-      <button class="enter" id="goRooms" style="margin-top:16px"></button>
+      <section class="reveal">
+        <div class="perks" id="perks"></div>
+      </section>
+
+      <section class="reveal center">
+        <button class="cta wide" id="goRooms2"></button>
+      </section>
     </div>
   </div>
 
@@ -256,74 +453,98 @@ body.in-room .notebook{background:linear-gradient(178deg,rgba(244,235,212,.94),r
     <h2 style="font-family:var(--serif);font-size:clamp(24px,5vw,34px);margin:18px 0 6px" id="roomsTitle"></h2>
     <p class="today-meta" id="roomsHint" style="margin-bottom:16px"></p>
     <div class="portals">
-      <button class="portal" data-style="pyramid"><span class="bg" id="bgPyr" style="background:radial-gradient(120% 80% at 50% 12%,rgba(246,231,184,.45),transparent 58%),linear-gradient(180deg,#17805C,#0A3A28 55%,#04170F)"></span><span class="plate"><h3 id="rnPyr"></h3><p id="rdPyr"></p></span></button>
-      <button class="portal" data-style="sphere"><span class="bg" id="bgSph" style="background:radial-gradient(70% 55% at 32% 26%,#FBE9B4,transparent 62%),radial-gradient(90% 70% at 75% 78%,#C9992F,transparent 66%),linear-gradient(180deg,#D9A63A,#4A340A)"></span><span class="plate"><h3 id="rnSph"></h3><p id="rdSph"></p></span></button>
-      <button class="portal" data-style="garden"><span class="bg" id="bgGar" style="background:radial-gradient(60% 45% at 78% 18%,rgba(255,246,200,.9),transparent 60%),linear-gradient(180deg,#BFE3C4,#5FA36B 52%,#2C5A38)"></span><span class="plate"><h3 id="rnGar"></h3><p id="rdGar"></p></span></button>
+      <button class="portal" data-style="green"><span class="bg" id="bgPyr" style="background:radial-gradient(120% 80% at 50% 12%,rgba(246,231,184,.45),transparent 58%),linear-gradient(180deg,#17805C,#0A3A28 55%,#04170F)"></span><span class="plate"><h3 id="rnPyr"></h3><p id="rdPyr"></p></span></button>
+      <button class="portal" data-style="gold"><span class="bg" id="bgGld" style="background:radial-gradient(70% 55% at 32% 26%,#FBE9B4,transparent 62%),radial-gradient(90% 70% at 75% 78%,#C9992F,transparent 66%),linear-gradient(180deg,#D9A63A,#4A340A)"></span><span class="plate"><h3 id="rnGld"></h3><p id="rdGld"></p></span></button>
+      <button class="portal" data-style="silver"><span class="bg" id="bgSlv" style="background:radial-gradient(120% 80% at 50% 12%,rgba(232,242,247,.5),transparent 58%),linear-gradient(180deg,#8B979D,#3A4246 52%,#0C0E0F)"></span><span class="plate"><h3 id="rnSlv"></h3><p id="rdSlv"></p></span></button>
     </div>
     <button class="chip" id="backHome" style="margin-top:16px"></button>
   </div>
 
   <!-- КОМНАТА -->
   <div class="view" id="viewRoom">
-  <div class="sub"><span id="role">…</span> · <span id="peers"></span></div>
-
-  <div class="card">
-    <div class="switch" id="hpSwitch" role="switch" aria-checked="false" tabindex="0">
-      <span class="track"><span class="knob"></span></span>
-      <span class="labels"><span class="on" id="hpNow"></span><span class="off" id="hpOther"></span></span>
+    <div class="room-bar">
+      <span class="rb-room"><span class="dot" id="rbDot"></span><span id="rbRole"></span></span>
+      <span class="rb-sep"></span>
+      <button class="ib" id="hpSwitch" role="switch" aria-checked="false" title="">
+        <span class="ib-ic" id="hpIc">🔈</span><span class="ib-tx" id="hpNow"></span>
+      </button>
+      <button class="ib" id="transfer" title=""><span class="ib-ic">⇄</span></button>
+      <button class="ib" id="toRooms" title=""><span class="ib-ic">◆</span></button>
+      <button class="ib" id="invite" title=""><span class="ib-ic">＋</span></button>
+      <button class="ib" id="diagBtn" title="i"><span class="ib-ic">i</span></button>
     </div>
-    <p class="mode-hint" id="hpHint"></p>
-  </div>
+    <p class="rb-hint" id="hpHint"></p>
 
-  <div class="card">
-    <div class="now"><b id="title"></b><span id="state">—</span></div>
-    <input type="range" id="seek" min="0" max="100" value="0">
-    <div class="time"><span id="cur">0:00</span><span id="rem">0:00</span></div>
-    <div class="transport">
-      <button class="tbtn" id="back15">−15</button>
-      <button class="tbtn main" id="play">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-      </button>
-      <button class="tbtn main" id="pause">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
-      </button>
-      <button class="tbtn" id="stop">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
-      </button>
-      <button class="tbtn" id="fwd15">+15</button>
+    <div class="console" id="console">
+      <div class="cs-now"><b id="title"></b><span id="state">—</span></div>
+      <input type="range" id="seek" min="0" max="100" value="0">
+      <div class="cs-time"><span id="cur">0:00</span><span id="rem">0:00</span></div>
+
+      <div class="cs-row">
+        <button class="cb" id="back15" title="">−15</button>
+        <button class="cb big" id="play" title="">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="cb big" id="pause" title="">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+        <button class="cb" id="stop" title="">
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+        <button class="cb" id="fwd15" title="">+15</button>
+      </div>
+
+      <div class="cs-row two">
+        <div class="drop" id="dropLib">
+          <button class="db" id="libBtn"><span>◍</span><span id="libLbl"></span></button>
+          <div class="menu" id="libMenu"></div>
+        </div>
+        <div class="drop" id="dropAdd">
+          <button class="db" id="addBtn"><span>↥</span><span id="addLbl"></span></button>
+          <div class="menu" id="addMenu">
+            <button class="mi" id="miFile"></button>
+            <button class="mi" id="miUrl"></button>
+            <div class="mi-url" id="urlBox">
+              <input id="urlInput" placeholder="https://…">
+              <button id="urlGo">→</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <input type="file" id="upload" style="display:none"
+        accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.aif,.aiff,.caf,.flac,.ogg,.oga,.opus,.mp4,.wma,.alac">
+
+      <div class="cs-chat" id="chatBox">
+        <div id="chat"></div>
+        <input id="chatInput">
+      </div>
+
+      <div class="cs-row vols">
+        <button class="ib" id="micBtn" aria-pressed="true" title="">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="17" height="17">
+            <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" stroke="none"/>
+            <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg></button>
+        <div class="drop up" id="dropMusic">
+          <button class="ib" id="musicBtn" title=""><span class="ib-ic">♪</span></button>
+          <div class="menu slider" id="musicMenu">
+            <label id="lblMusic"></label>
+            <input type="range" id="music" min="0" max="100" value="60">
+          </div>
+        </div>
+        <div class="drop up" id="dropVoice">
+          <button class="ib" id="voiceBtn" title=""><span class="ib-ic">◉</span></button>
+          <div class="menu slider" id="voiceMenu">
+            <label id="lblVoice"></label>
+            <input type="range" id="voice" min="0" max="100" value="85">
+          </div>
+        </div>
+        <span id="duck"></span>
+      </div>
     </div>
-  </div>
 
-  <div class="card">
-    <h3 style="font-size:19px;margin-bottom:8px" id="tracksTitle"></h3>
-    <div class="rail" id="tracks"></div>
-    <label class="upload" for="upload" id="uploadLabel"></label>
-    <input type="file" id="upload" accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.aif,.aiff,.caf,.flac,.ogg,.oga,.opus,.mp4,.wma,.alac">
-    <p class="hint" id="tracksHint"></p>
-  </div>
-
-  <div class="card notebook">
-    <h3 id="chatTitle"></h3>
-    <div id="chat"></div>
-    <input id="chatInput">
-  </div>
-
-  <div class="card bottom">
-    <button id="mic" aria-pressed="true">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-        <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" stroke="none"/>
-        <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
-    </button>
-    <div class="vol"><label id="lblMusic"></label><input type="range" id="music" min="0" max="100" value="60"></div>
-    <div class="vol"><label id="lblVoice"></label><input type="range" id="voice" min="0" max="100" value="85"></div>
-    <span id="duck"></span>
-  </div>
-
-  <div class="card">
-    <h3 style="font-size:19px;margin-bottom:8px" id="diagTitle"></h3>
-    <div id="diag"></div>
-    <p class="hint" id="diagHint"></p>
-  </div>
+    <div class="diag-sheet" id="diagSheet">
+      <h3 style="font-size:19px;margin-bottom:8px" id="diagTitle"></h3>
+      <div id="diag"></div>
+      <p class="hint" id="diagHint"></p>
+    </div>
   </div>
 </div>
 

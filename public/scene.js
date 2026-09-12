@@ -10,6 +10,10 @@ window.Scene = (function () {
   var mats = {}, lights = {}, extras = [], dust = null, dustSpeed = null, disc = null;
   var tgt = { x: 0, y: 0 }, smooth = { x: 0, y: 0 }, fps = 0, frames = 0, acc = 0;
 
+  /* ноль — это значение, а не «не задано»: без этой проверки в саду
+     когда-то вырастали золотые прожилки, которых там быть не должно */
+  function num(v, d) { return v === undefined || v === null ? d : v; }
+
   function rngFactory(a) {
     return function () {
       a |= 0; a = a + 0x6D2B79F5 | 0;
@@ -65,7 +69,8 @@ window.Scene = (function () {
   }
 
   /* золотые потоки: зернистая пыль вдоль блуждающего русла */
-  function goldOps(seed,W,H,rivers){
+  function goldOps(seed,W,H,rivers,clump){
+  clump=num(clump,.045);
   var rnd=rngFactory(seed),ops=[],clumps=[],glow=[];
   for(var r=0;r<rivers;r++){
     var x=rnd()*W,y=rnd()*H,a=rnd()*6.283;
@@ -87,9 +92,9 @@ window.Scene = (function () {
         dd=core*2+Math.pow(rnd(),2.6)*W*.042*scale;aa=rnd()*6.283;
         ops.push([x+Math.cos(aa)*dd,y+Math.sin(aa)*dd,(.28+rnd()*.75)*scale,rnd()]);
       }
-      if(rnd()<.045){
+      if(rnd()<clump){
         var n=26+Math.floor(rnd()*44),ca=Math.cos(a),sa=Math.sin(a);
-        var rx=core*(3.5+rnd()*3),ry=core*(1+rnd()*1.4);
+        var rx=core*(3.5+rnd()*3.5),ry=core*(1+rnd()*1.6);
         for(i=0;i<n;i++){
           var u=(rnd()*2-1),v=(rnd()*2-1);
           if(u*u+v*v>1)continue;
@@ -102,13 +107,15 @@ window.Scene = (function () {
   return {ops:ops,clumps:clumps,glow:glow};
   }
   var GOLD=['#FFF7D8','#F7E09C','#E6C263','#CFA23A','#A87C20','#77590F'];
-  function paintGold(ctx,g,mode){
+  var SILVER=['#FFFFFF','#EDF3F6','#CBD6DB','#A3AFB5','#77828A','#4C555B'];
+  function paintGold(ctx,g,mode,pal,glow){
+  pal=pal||GOLD; glow=glow||'214,168,60';
   var i,o,grd;
   if(mode!=='metal'){
     for(i=0;i<g.glow.length;i++){
       o=g.glow[i];
       grd=ctx.createRadialGradient(o[0],o[1],0,o[0],o[1],o[2]);
-      if(mode==='color'){grd.addColorStop(0,'rgba(214,168,60,.20)');grd.addColorStop(1,'rgba(214,168,60,0)')}
+      if(mode==='color'){grd.addColorStop(0,'rgba('+glow+',.22)');grd.addColorStop(1,'rgba('+glow+',0)')}
       else{grd.addColorStop(0,'rgba(150,110,30,.35)');grd.addColorStop(1,'rgba(0,0,0,0)')}
       ctx.fillStyle=grd;ctx.beginPath();ctx.arc(o[0],o[1],o[2],0,6.283);ctx.fill();
     }
@@ -116,8 +123,8 @@ window.Scene = (function () {
   var all=g.clumps.concat(g.ops);
   for(i=0;i<all.length;i++){
     o=all[i];
-    if(mode==='color')ctx.fillStyle=GOLD[Math.floor(o[3]*GOLD.length)];
-    else if(mode==='em')ctx.fillStyle=o[3]<.45?'#FFEBA6':'#A87C20';
+    if(mode==='color')ctx.fillStyle=pal[Math.floor(o[3]*pal.length)];
+    else if(mode==='em')ctx.fillStyle=o[3]<.45?pal[1]:pal[4];
     else ctx.fillStyle=o[3]<.7?'#ffffff':'#b4b4b4';
     ctx.beginPath();ctx.arc(o[0],o[1],o[2],0,6.283);ctx.fill();
   }
@@ -125,9 +132,6 @@ window.Scene = (function () {
 
   /* марблинг: вложенные текучие слои камня */
   function marbleSet(W,H,seed,P){
-  // ноль — это значение, а не «не задано»: без этой проверки в саду
-  // вырастали золотые прожилки, которых там быть не должно
-  var num=function(v,d){return v===undefined||v===null?d:v};
   var rnd=rngFactory(seed+11);
   var color=makeCanvas(W,H),cx=color.getContext('2d');
   var stops=P.ramp.map(hexRGB);
@@ -230,11 +234,11 @@ window.Scene = (function () {
   drawPaths(cx,genCracks(seed+8,W,H,Math.round(W/260),.7),.16,1,P.hair);
 
   cx.save();cx.filter='blur('+Math.round(W/40)+'px)';
-  for(b=0;b<8;b++){
+  for(b=0;b<num(P.shade,5);b++){
     var sx0=rnd()*W,sy0=rnd()*H,sr=W*(.16+rnd()*.30);
     var sg=cx.createRadialGradient(sx0,sy0,0,sx0,sy0,sr);
-    sg.addColorStop(0,'rgba(0,10,6,'+(.30+rnd()*.34).toFixed(2)+')');
-    sg.addColorStop(1,'rgba(0,10,6,0)');
+    sg.addColorStop(0,'rgba('+(P.shadeRGB||'0,10,6')+','+(.16+rnd()*.24).toFixed(2)+')');
+    sg.addColorStop(1,'rgba('+(P.shadeRGB||'0,10,6')+',0)');
     cx.fillStyle=sg;cx.beginPath();cx.arc(sx0,sy0,sr,0,6.283);cx.fill();
   }
   cx.restore();
@@ -243,56 +247,67 @@ window.Scene = (function () {
   for(b=0;b<3;b++)eddy();
 
   /* золото */
-  var rivers=num(P.rivers,5);
-  var g=goldOps(seed+21,W,H,rivers);
+  var rivers=num(P.rivers,5), pal=P.vein||GOLD, glow=P.glow||'214,168,60';
+  var g=goldOps(seed+21,W,H,rivers,P.clump);
   var gcr=genCracks(seed+31,W,H,Math.round(W/420),.75);
   if(rivers){
-    paintGold(cx,g,'color');
-    drawPaths(cx,gcr,.5,1,'#CFA23A');
-    drawPaths(cx,gcr,.32,.45,'#FFF0C0');
+    paintGold(cx,g,'color',pal,glow);
+    drawPaths(cx,gcr,.5,1,pal[3]);
+    drawPaths(cx,gcr,.32,.45,pal[0]);
   }
 
   var em=makeCanvas(W,H),ex=em.getContext('2d');
   ex.fillStyle='#000';ex.fillRect(0,0,W,H);
   if(rivers){
-    paintGold(ex,g,'em');
-    drawPaths(ex,gcr,.6,1,'#A87C20');
-    drawPaths(ex,gcr,.45,.45,'#FFEFC0');
+    paintGold(ex,g,'em',pal,glow);
+    drawPaths(ex,gcr,.6,1,pal[4]);
+    drawPaths(ex,gcr,.45,.45,pal[1]);
   }
 
   var mt=makeCanvas(W,H),mx=mt.getContext('2d');
   mx.fillStyle='#000';mx.fillRect(0,0,W,H);
   if(rivers){
-    paintGold(mx,g,'metal');
+    paintGold(mx,g,'metal',pal,glow);
     drawPaths(mx,gcr,.75,1,'#d2d2d2');
   }
 
   return {color:color,emissive:em,metal:mt};
   }
-  /* ---------- палитры ---------- */
+  /* ---------- три пирамиды, три гаммы ---------- */
+  var SILVER = ['#FFFFFF', '#EDF3F6', '#CBD6DB', '#A3AFB5', '#77828A', '#4C555B'];
+
   var PALETTE = {
-    pyramid: {
-      wall: { base: '#052318', ramp: ['#010B07', '#031C12', '#073423', '#0C4A34', '#17654A', '#3E8A6C', '#8FBFA6'],
-              hair: '#C3DCCE', crack: '#010A06', bands: 16, rivers: 7, masses: 15, ripples: 7 },
-      floor: { base: '#03170E', ramp: ['#000603', '#02130C', '#05291B', '#093F2C', '#0F5A40', '#2C7357'],
-               hair: '#8FB6A3', crack: '#000502', bands: 10, rivers: 3, masses: 9, ripples: 4 },
-      fog: 0x02110A, bg: 0x010A06, ambient: 0x1A7350, key: 0xFFE6A8, accent: 0x7CF0C4
+    green: {
+      wall: { base: '#052A1B', ramp: ['#01100A', '#04251A', '#0A4732', '#12704F', '#1F9A6C', '#63C39F', '#BCE4D0'],
+              hair: '#DCF0E6', crack: '#010D08', bands: 17, rivers: 11, masses: 15, ripples: 8, clump: .075, shade: 5 },
+      floor: { base: '#03190F', ramp: ['#000704', '#02150D', '#062E1E', '#0B4832', '#116348', '#2F7D60'],
+               hair: '#9FC5B3', crack: '#000502', bands: 11, rivers: 5, masses: 9, ripples: 4, clump: .05 },
+      fog: 0x02110A, bg: 0x010A06, ambient: 0x1A7350, amb: .5,
+      key: 0xFFE6A8, accent: 0x7CF0C4, rim: 0x2FBF8E, warm: 0xE0A84A,
+      veinColor: 0xE9C86E, shaftRGB: 'rgba(255,236,180,', env: ['#F6E7B8', '#3E7A5E', '#02100A'], dust: 0
     },
-    sphere: {
+    gold: {
       wall: { base: '#4A3208', ramp: ['#140C01', '#332004', '#6B4A0D', '#A9761A', '#D9A63A', '#F2CE72', '#FFF3CE'],
-              hair: '#FFF6DC', crack: '#180E01', bands: 15, rivers: 9, masses: 13, ripples: 8 },
+              hair: '#FFF6DC', crack: '#180E01', bands: 15, rivers: 9, masses: 13, ripples: 8, clump: .06, shade: 5 },
       floor: { base: '#2A1B04', ramp: ['#0C0700', '#221503', '#4A3208', '#7A5510', '#B2842A', '#E0BA5E'],
                hair: '#F3DEA8', crack: '#0E0800', bands: 9, rivers: 4, masses: 8, ripples: 4 },
-      fog: 0x2A1B04, bg: 0x160D02, ambient: 0xC8913A, key: 0xFFF0C8, accent: 0xFFD98A
+      fog: 0x2A1B04, bg: 0x160D02, ambient: 0xC8913A, amb: .5,
+      key: 0xFFF0C8, accent: 0xFFD98A, rim: 0xD8A340, warm: 0xFFE9B0,
+      veinColor: 0xFFD98A, shaftRGB: 'rgba(255,240,200,', env: ['#FFF6D8', '#C9992F', '#2A1B04'], dust: 420
     },
-    garden: {
-      wall: { base: '#7FB6D8', ramp: ['#5E97C4', '#7FB6D8', '#A7D2E6', '#CDE6F0', '#E8F2E2', '#F6F0D8', '#FFF8E4'],
-              hair: '#FFFFFF', crack: '#6FA6CC', bands: 9, rivers: 0, masses: 10, ripples: 3 },
-      floor: { base: '#2E5E33', ramp: ['#16331A', '#22461F', '#2E5E33', '#3E7B41', '#559B52', '#7BB86F'],
-               hair: '#B9D9A0', crack: '#12280F', bands: 12, rivers: 0, masses: 12, ripples: 6 },
-      fog: 0x9CC7DE, bg: 0x9CC7DE, ambient: 0xBFE0D0, key: 0xFFF3D0, accent: 0xA8E08A
+    silver: {
+      wall: { base: '#2B3033', ramp: ['#0B0E0F', '#1B1F22', '#333A3E', '#4E575C', '#717B81', '#AAB4B9', '#E2E8EB'],
+              hair: '#FFFFFF', crack: '#080A0B', bands: 16, rivers: 10, masses: 14, ripples: 8, clump: .07, shade: 5,
+              vein: SILVER, glow: '200,215,222', shadeRGB: '4,6,8' },
+      floor: { base: '#1A1E20', ramp: ['#050607', '#101314', '#22282B', '#363E42', '#525B60', '#7E888D'],
+               hair: '#C8D2D7', crack: '#040506', bands: 10, rivers: 4, masses: 9, ripples: 4,
+               vein: SILVER, glow: '200,215,222', shadeRGB: '3,4,5' },
+      fog: 0x121618, bg: 0x080A0B, ambient: 0x7E97A3, amb: .46,
+      key: 0xDCEAF2, accent: 0xBFD8E2, rim: 0x6E8A99, warm: 0xA8BCC6,
+      veinColor: 0xCFE2EA, shaftRGB: 'rgba(224,240,248,', env: ['#EAF4FA', '#5E727C', '#0A0C0D'], dust: 260
     }
   };
+  PALETTE.pyramid = PALETTE.green;   // старое имя комнаты продолжает работать
 
   function tex(canvas, rx, ry) {
     var t = new THREE.CanvasTexture(canvas);
@@ -302,28 +317,27 @@ window.Scene = (function () {
     return t;
   }
 
-  function stoneMaterial(set, rx, ry, opts) {
-    opts = opts || {};
+  function stoneMaterial(set, rx, ry, o) {
+    o = o || {};
     return new THREE.MeshStandardMaterial({
       map: tex(set.color, rx, ry),
       emissiveMap: tex(set.emissive, rx, ry),
       metalnessMap: tex(set.metal, rx, ry),
-      emissive: new THREE.Color(opts.emissive === undefined ? 0xE9C86E : opts.emissive),
-      emissiveIntensity: opts.ei === undefined ? 0.6 : opts.ei,
+      emissive: new THREE.Color(o.emissive === undefined ? 0xE9C86E : o.emissive),
+      emissiveIntensity: o.ei === undefined ? .6 : o.ei,
       metalness: 1,
-      roughness: opts.rough === undefined ? 0.46 : opts.rough,
-      side: opts.side || THREE.FrontSide
+      roughness: o.rough === undefined ? .46 : o.rough,
+      side: o.side || THREE.FrontSide
     });
   }
 
-  /* окружение для отражений — простая градиентная сфера */
-  function environment(top, mid, bot) {
+  function environment(c) {
     try {
-      var c = makeCanvas(512, 256), x = c.getContext('2d');
+      var cv = makeCanvas(512, 256), x = cv.getContext('2d');
       var g = x.createLinearGradient(0, 0, 0, 256);
-      g.addColorStop(0, top); g.addColorStop(.32, mid); g.addColorStop(1, bot);
+      g.addColorStop(0, c[0]); g.addColorStop(.32, c[1]); g.addColorStop(1, c[2]);
       x.fillStyle = g; x.fillRect(0, 0, 512, 256);
-      var t = new THREE.CanvasTexture(c);
+      var t = new THREE.CanvasTexture(cv);
       t.mapping = THREE.EquirectangularReflectionMapping;
       var p = new THREE.PMREMGenerator(renderer);
       scene.environment = p.fromEquirectangular(t).texture;
@@ -357,150 +371,50 @@ window.Scene = (function () {
     return p;
   }
 
-  function vinylTexture() {
+  function vinylTexture(P) {
     var c = makeCanvas(512, 512), v = c.getContext('2d');
-    v.fillStyle = '#08211A'; v.fillRect(0, 0, 512, 512);
+    v.fillStyle = '#0B0E0D'; v.fillRect(0, 0, 512, 512);
     for (var r = 40; r < 250; r += 2.2) {
       v.beginPath(); v.arc(256, 256, r, 0, 6.283);
       v.strokeStyle = r % 9 < 4 ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.35)';
       v.lineWidth = 1; v.stroke();
     }
     var lg = v.createRadialGradient(200, 190, 0, 256, 256, 120);
-    lg.addColorStop(0, 'rgba(180,255,230,.22)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
+    lg.addColorStop(0, 'rgba(220,255,245,.2)'); lg.addColorStop(1, 'rgba(0,0,0,0)');
     v.fillStyle = lg; v.beginPath(); v.arc(256, 256, 250, 0, 6.283); v.fill();
+    var pal = P.wall.vein || GOLD;
     v.beginPath(); v.arc(256, 256, 86, 0, 6.283);
     var g2 = v.createRadialGradient(220, 220, 4, 256, 256, 86);
-    g2.addColorStop(0, '#FFF3CF'); g2.addColorStop(.5, '#E3C878'); g2.addColorStop(1, '#8A6B18');
+    g2.addColorStop(0, pal[0]); g2.addColorStop(.5, pal[2]); g2.addColorStop(1, pal[4]);
     v.fillStyle = g2; v.fill();
     v.beginPath(); v.arc(256, 256, 7, 0, 6.283); v.fillStyle = '#04170F'; v.fill();
     return c;
   }
 
-  /* ---------- комната: пирамида ---------- */
+  /* Одна пирамида на три комнаты: разница только в камне и свете. */
   function buildPyramid(P) {
-    var wall = marbleSet(2048, 2048, 1234, P.wall);
-    mats.wall = stoneMaterial(wall, 1, 1, { ei: .5, side: THREE.BackSide });
+    var wall = marbleSet(2048, 2048, P.seed || 1234, P.wall);
+    mats.wall = stoneMaterial(wall, 1, 1, { ei: .35, emissive: P.veinColor, side: THREE.BackSide });
     var pyr = new THREE.Mesh(new THREE.ConeGeometry(9, 12, 4, 24, true), mats.wall);
     pyr.rotation.y = Math.PI / 4; pyr.position.y = 6; scene.add(pyr);
 
-    var flr = marbleSet(1024, 1024, 880, P.floor);
-    mats.floor = stoneMaterial(flr, 2, 2, { emissive: 0xC9A85A, ei: .12, rough: .26 });
+    var flr = marbleSet(1024, 1024, (P.seed || 1234) + 646, P.floor);
+    mats.floor = stoneMaterial(flr, 2, 2, { emissive: P.veinColor, ei: .1, rough: .26 });
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
 
-    lights.key = new THREE.PointLight(P.key, 14, 26, 2);
+    lights.key = new THREE.PointLight(P.key, 12, 26, 2);
     lights.key.position.set(0, 8.4, 0); scene.add(lights.key);
     lights.accent = new THREE.PointLight(P.accent, 4, 9, 2);
     lights.accent.position.set(0, 1.9, .4); scene.add(lights.accent);
-    var rim = new THREE.PointLight(0x2FBF8E, 6, 20, 2); rim.position.set(-6, 2.4, -5); scene.add(rim);
-    var warm = new THREE.PointLight(0xE0A84A, 5, 18, 2); warm.position.set(6, 3.2, -4); scene.add(warm);
+    var rim = new THREE.PointLight(P.rim, 6, 20, 2); rim.position.set(-6, 2.4, -5); scene.add(rim);
+    var warm = new THREE.PointLight(P.warm, 5, 18, 2); warm.position.set(6, 3.2, -4); scene.add(warm);
 
-    shaft(2.6, 8.4, 4.4, 'rgba(255,236,180,');
-    table();
-    environment('#F6E7B8', '#3E7A5E', '#02100A');
+    shaft(2.6, 8.4, 4.4, P.shaftRGB);
+    table(P);
+    if (P.dust) dust = particles(P.dust, 8, 8, .055, P.veinColor, .8);
+    environment(P.env);
     camera.position.set(0, 1.75, 4.6);
-  }
-
-  /* ---------- комната: золотая сфера ---------- */
-  function buildSphere(P) {
-    var wall = marbleSet(2048, 1024, 4321, P.wall);
-    mats.wall = stoneMaterial(wall, 2, 1, { emissive: 0xFFD98A, ei: .5, rough: .32, side: THREE.BackSide });
-    var ball = new THREE.Mesh(new THREE.SphereGeometry(11, 64, 48), mats.wall);
-    ball.position.y = 3; scene.add(ball);
-
-    var flr = marbleSet(1024, 1024, 77, P.floor);
-    mats.floor = stoneMaterial(flr, 2, 2, { emissive: 0xE0BA5E, ei: .16, rough: .2 });
-    var floor = new THREE.Mesh(new THREE.CircleGeometry(10, 64), mats.floor);
-    floor.rotation.x = -Math.PI / 2; scene.add(floor);
-
-    lights.key = new THREE.PointLight(P.key, 16, 30, 2);
-    lights.key.position.set(0, 6.5, 1); scene.add(lights.key);
-    lights.accent = new THREE.PointLight(P.accent, 6, 14, 2);
-    lights.accent.position.set(-3, 2.4, 2); scene.add(lights.accent);
-    var back = new THREE.PointLight(0xFFF0C8, 5, 22, 2); back.position.set(4, 4, -5); scene.add(back);
-
-    /* висящий экран: тонкая пластина с золотым ободом */
-    var panel = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.6, .06),
-      new THREE.MeshStandardMaterial({ color: 0x1A1204, metalness: .6, roughness: .3, emissive: 0x2A1D06, emissiveIntensity: 1 }));
-    panel.position.set(0, 2.1, 0); scene.add(panel); extras.push(panel);
-    var frame = new THREE.Mesh(new THREE.TorusGeometry(1.62, .035, 10, 60),
-      new THREE.MeshStandardMaterial({ color: 0xF6E7B8, metalness: 1, roughness: .18 }));
-    frame.position.set(0, 2.1, 0); frame.scale.set(1, .62, 1); scene.add(frame); extras.push(frame);
-    var cord = new THREE.Mesh(new THREE.CylinderGeometry(.008, .008, 3, 6),
-      new THREE.MeshBasicMaterial({ color: 0xE3C878 }));
-    cord.position.set(0, 4.4, 0); scene.add(cord);
-    mats.panel = panel.material;
-
-    // искры в золотом воздухе — те самые, что убрали из пирамиды
-    dust = particles(420, 8, 8, .06, 0xFFF0C0, .8);
-    environment('#FFF6D8', '#C9992F', '#2A1B04');
-    camera.position.set(0, 1.9, 5.2);
-  }
-
-  /* ---------- комната: сад ---------- */
-  function buildGarden(P) {
-    var sky = marbleSet(2048, 1024, 909, P.wall);
-    mats.wall = new THREE.MeshBasicMaterial({ map: tex(sky.color, 2, 1), side: THREE.BackSide, fog: false });
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(40, 32, 24), mats.wall));
-
-    var grass = marbleSet(1024, 1024, 5150, P.floor);
-    mats.floor = stoneMaterial(grass, 6, 6, { emissive: 0x2E5E33, ei: .06, rough: .95 });
-    mats.floor.metalness = 0;
-    var floor = new THREE.Mesh(new THREE.CircleGeometry(26, 64), mats.floor);
-    floor.rotation.x = -Math.PI / 2; scene.add(floor);
-
-    lights.key = new THREE.DirectionalLight(P.key, 1.5);
-    lights.key.position.set(6, 9, 4); scene.add(lights.key);
-    lights.accent = new THREE.PointLight(P.accent, 3, 14, 2);
-    lights.accent.position.set(0, 2, 2); scene.add(lights.accent);
-
-    var rnd = rngFactory(2024);
-    var bushMat = [
-      new THREE.MeshStandardMaterial({ color: 0x2F6B34, roughness: .95, flatShading: true }),
-      new THREE.MeshStandardMaterial({ color: 0x3E8140, roughness: .95, flatShading: true }),
-      new THREE.MeshStandardMaterial({ color: 0x27562C, roughness: .95, flatShading: true })
-    ];
-    for (var i = 0; i < 26; i++) {
-      var a = rnd() * 6.283, r = 5 + rnd() * 15;
-      var s = .7 + rnd() * 1.6;
-      var b = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), bushMat[i % 3]);
-      b.position.set(Math.cos(a) * r, s * .75, Math.sin(a) * r);
-      b.rotation.set(rnd(), rnd(), rnd());
-      scene.add(b);
-    }
-    var petals = [0xF2C94C, 0xE77F9E, 0xF7F3E6, 0xC88CE0, 0xF2994A];
-    var stem = new THREE.MeshStandardMaterial({ color: 0x2C5A38, roughness: 1 });
-    for (var j = 0; j < 60; j++) {
-      var aa = rnd() * 6.283, rr = 2.5 + rnd() * 12, h = .3 + rnd() * .5;
-      var st = new THREE.Mesh(new THREE.CylinderGeometry(.015, .02, h, 5), stem);
-      st.position.set(Math.cos(aa) * rr, h / 2, Math.sin(aa) * rr); scene.add(st);
-      var fm = new THREE.MeshStandardMaterial({ color: petals[j % 5], roughness: .7, emissive: petals[j % 5], emissiveIntensity: .12 });
-      var fl = new THREE.Mesh(new THREE.SphereGeometry(.09, 10, 8), fm);
-      fl.position.set(st.position.x, h + .05, st.position.z); scene.add(fl);
-      if (j < 12) extras.push(fl);
-    }
-    /* пенёк с кассетником */
-    var woodC = makeCanvas(256, 256), w = woodC.getContext('2d');
-    w.fillStyle = '#6B4F31'; w.fillRect(0, 0, 256, 256);
-    for (var k = 6; k < 130; k += 4 + Math.random() * 5) {
-      w.beginPath(); w.arc(128, 128, k, 0, 6.283);
-      w.strokeStyle = k % 9 < 4 ? 'rgba(60,40,20,.55)' : 'rgba(180,140,90,.35)';
-      w.lineWidth = 1.6; w.stroke();
-    }
-    var stump = new THREE.Mesh(new THREE.CylinderGeometry(.9, 1, 1.1, 24),
-      new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(woodC), roughness: .95 }));
-    stump.position.set(0, .55, 0); scene.add(stump);
-    var deck = new THREE.Mesh(new THREE.BoxGeometry(1.1, .35, .7),
-      new THREE.MeshStandardMaterial({ color: 0x3B2E20, roughness: .6, metalness: .2 }));
-    deck.position.set(0, 1.28, 0); scene.add(deck);
-    var reelMat = new THREE.MeshStandardMaterial({ color: 0xC9B896, roughness: .5, metalness: .3 });
-    for (var q = 0; q < 2; q++) {
-      var reel = new THREE.Mesh(new THREE.TorusGeometry(.12, .035, 8, 20), reelMat);
-      reel.position.set(q ? .22 : -.22, 1.3, .36); scene.add(reel); extras.push(reel);
-    }
-    dust = particles(240, 14, 5, .05, 0xFFF6C8, .55);
-    environment('#EAF6FF', '#BBD9E6', '#3E7B41');
-    camera.position.set(0, 1.7, 6);
   }
 
   /* общий световой луч сверху */
@@ -518,31 +432,31 @@ window.Scene = (function () {
   }
 
   /* стеклянный стол с вертушкой — только в пирамиде */
-  function table() {
+  function table(P) {
     var glass = new THREE.MeshStandardMaterial({
       color: 0xBFF3E0, transparent: true, opacity: .28, metalness: .1, roughness: .06, envMapIntensity: 1.6
     });
     var top = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, .07, 64), glass);
     top.position.y = 1.02; scene.add(top);
     var edge = new THREE.Mesh(new THREE.TorusGeometry(1.35, .035, 12, 64),
-      new THREE.MeshStandardMaterial({ color: 0xE3C878, metalness: 1, roughness: .22 }));
+      new THREE.MeshStandardMaterial({ color: P.veinColor, metalness: 1, roughness: .22 }));
     edge.rotation.x = Math.PI / 2; edge.position.y = 1.02; scene.add(edge);
     var stem = new THREE.Mesh(new THREE.CylinderGeometry(.16, .34, 1, 32), glass);
     stem.position.y = .5; scene.add(stem);
 
     disc = new THREE.Mesh(new THREE.CylinderGeometry(.62, .62, .018, 64), [
       new THREE.MeshStandardMaterial({ color: 0x0B2A20, metalness: .5, roughness: .5 }),
-      new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(vinylTexture()), metalness: .55, roughness: .28 }),
+      new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(vinylTexture(P)), metalness: .55, roughness: .28 }),
       new THREE.MeshStandardMaterial({ color: 0x08201A, metalness: .5, roughness: .6 })
     ]);
     disc.position.y = 1.07; scene.add(disc);
 
     var arm = new THREE.Mesh(new THREE.CylinderGeometry(.02, .02, 1.05, 12),
-      new THREE.MeshStandardMaterial({ color: 0xF6E7B8, metalness: 1, roughness: .2 }));
+      new THREE.MeshStandardMaterial({ color: P.veinColor, metalness: 1, roughness: .2 }));
     arm.rotation.set(0, 0, Math.PI / 2); arm.rotation.y = -.55;
     arm.position.set(.42, 1.16, .36); scene.add(arm);
     var pivot = new THREE.Mesh(new THREE.SphereGeometry(.09, 20, 16),
-      new THREE.MeshStandardMaterial({ color: 0xE3C878, metalness: 1, roughness: .25 }));
+      new THREE.MeshStandardMaterial({ color: P.veinColor, metalness: 1, roughness: .25 }));
     pivot.position.set(.88, 1.14, .62); scene.add(pivot);
   }
 
@@ -556,20 +470,14 @@ window.Scene = (function () {
     level += (target - level) * Math.min(1, dt * 9);
     var L = level;
 
-    if (mats.wall) mats.wall.emissiveIntensity = (kind === 'garden' ? .05 : .38) + L * (kind === 'garden' ? .2 : 1.7);
-    if (mats.floor) mats.floor.emissiveIntensity = (kind === 'garden' ? .04 : .1) + L * .5;
-    if (mats.panel) mats.panel.emissiveIntensity = .6 + L * 2.4;
-    if (mats.shaft) mats.shaft.opacity = .08 + L * .26;
-    if (lights.key) lights.key.intensity = (kind === 'garden' ? 1.1 : 12) + L * (kind === 'garden' ? .8 : 20);
-    if (lights.accent) lights.accent.intensity = (kind === 'garden' ? 2 : 3.4) + L * 8;
+    /* Размах нарочно большой: в тишине прожилки почти гаснут,
+       на громком месте вспыхивают. Иначе реакции не видно вообще. */
+    if (mats.wall) mats.wall.emissiveIntensity = .10 + L * 3.6;
+    if (mats.floor) mats.floor.emissiveIntensity = .04 + L * 1.1;
+    if (mats.shaft) mats.shaft.opacity = .04 + L * .42;
+    if (lights.key) lights.key.intensity = 7 + L * 30;
+    if (lights.accent) lights.accent.intensity = 2.2 + L * 10;
     if (disc && playing) disc.rotation.y += dt * 1.9;
-
-    for (var i = 0; i < extras.length; i++) {
-      var e = extras[i];
-      e.rotation.z += dt * (playing ? .6 : 0);
-      if (e.material && e.material.emissiveIntensity !== undefined && kind === 'garden')
-        e.material.emissiveIntensity = .1 + L * .8;
-    }
 
     if (dust) {
       var p = dust.geometry.attributes.position.array, H = dust.userData.height;
@@ -609,6 +517,7 @@ window.Scene = (function () {
   }
 
   return {
+    _marble: marbleSet,
     supported: function () {
       try { return !!window.THREE && !!document.createElement('canvas').getContext('webgl'); }
       catch (e) { return false; }
@@ -616,7 +525,7 @@ window.Scene = (function () {
     enter: function (which, canvas) {
       this.dispose();
       if (!window.THREE) return false;
-      kind = PALETTE[which] ? which : 'pyramid';
+      kind = PALETTE[which] ? which : 'green';
       var P = PALETTE[kind];
       try {
         renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
@@ -624,21 +533,20 @@ window.Scene = (function () {
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
       renderer.outputEncoding = THREE.sRGBEncoding;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = kind === 'garden' ? 1.15 : 1.0;
+      renderer.toneMappingExposure = 1.0;
 
       scene = new THREE.Scene();
       scene.background = new THREE.Color(P.bg);
-      scene.fog = new THREE.FogExp2(P.fog, kind === 'garden' ? .012 : .038);
+      scene.fog = new THREE.FogExp2(P.fog, .038);
       camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, .1, 200);
-      scene.add(new THREE.AmbientLight(P.ambient, kind === 'garden' ? .85 : .44));
+      scene.add(new THREE.AmbientLight(P.ambient, P.amb || .46));
 
       mats = {}; lights = {}; extras = []; dust = null; disc = null;
-      if (kind === 'pyramid') buildPyramid(P);
-      else if (kind === 'sphere') buildSphere(P);
-      else buildGarden(P);
+      P.seed = { green: 1234, gold: 4321, silver: 8080 }[kind] || 1234;
+      buildPyramid(P);
 
       camera.userData.baseY = camera.position.y;
-      camera.userData.lookY = kind === 'garden' ? 1.3 : 1.25;
+      camera.userData.lookY = 1.25;
       clock = new THREE.Clock();
       alive = true;
       onResize();
@@ -651,6 +559,7 @@ window.Scene = (function () {
     setLevel: function (v) { target = Math.max(0, Math.min(1, v || 0)); },
     setPlaying: function (b) { playing = !!b; },
     fps: function () { return fps; },
+    level: function () { return level; },
     kind: function () { return kind; },
     dispose: function () {
       if (raf) cancelAnimationFrame(raf);

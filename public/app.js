@@ -15,15 +15,16 @@ const fmt = s => (s < 0 ? '0:00' : Math.floor(s / 60) + ':' + String(Math.floor(
 const ui = {
   title: $('#title'), state: $('#state'), seek: $('#seek'), cur: $('#cur'), rem: $('#rem'),
   play: $('#play'), pause: $('#pause'), stop: $('#stop'), back15: $('#back15'), fwd15: $('#fwd15'),
-  tracks: $('#tracks'), chat: $('#chat'), chatInput: $('#chatInput'),
-  mic: $('#mic'), music: $('#music'), voice: $('#voice'), role: $('#role'),
-  peers: $('#peers'), duck: $('#duck'), diag: $('#diag'), invite: $('#invite'),
+  chat: $('#chat'), chatInput: $('#chatInput'),
+  music: $('#music'), voice: $('#voice'), duck: $('#duck'), diag: $('#diag'), invite: $('#invite'),
   transfer: $('#transfer'), upload: $('#upload'), lang: $('#lang'),
-  hp: $('#hpSwitch'), hpNow: $('#hpNow'), hpOther: $('#hpOther'), hpHint: $('#hpHint'),
-  toRooms: $('#toRooms'), goRooms: $('#goRooms'), backHome: $('#backHome')
+  hp: $('#hpSwitch'), hpNow: $('#hpNow'), hpHint: $('#hpHint'), hpIc: $('#hpIc'),
+  toRooms: $('#toRooms'), goRooms: $('#goRooms'), backHome: $('#backHome'),
+  mic: $('#micBtn'), chatBox: $('#chatBox'), rbRole: $('#rbRole'), rbDot: $('#rbDot'),
+  libMenu: $('#libMenu'), libLbl: $('#libLbl'), addLbl: $('#addLbl')
 };
 
-var roomStyle = 'pyramid';   // какая комната открыта у обоих
+var roomStyle = 'green';   // какая комната открыта у обоих
 
 /* ---------------- язык ---------------- */
 let lang = localStorage.getItem('pyr-lang') || 'en';
@@ -42,23 +43,24 @@ function applyLang() {
   $('#name').placeholder = t('gate.name');
   $('#enter').textContent = t('gate.enter');
   $('#gateMic').textContent = t('gate.mic');
-  ui.invite.textContent = t('btn.invite');
-  ui.transfer.textContent = isMaster ? t('btn.transfer') : t('btn.back');
-  $('#tracksTitle').textContent = t('tracks.title');
-  $('#uploadLabel').textContent = t('tracks.upload');
-  $('#tracksHint').textContent = t('tracks.hint');
-  $('#chatTitle').textContent = t('chat.title');
+  ui.libLbl.textContent = t('lib.btn');
+  ui.addLbl.textContent = t('add.btn');
+  $('#miFile').textContent = t('add.file');
+  $('#miUrl').textContent = t('add.url');
   ui.chatInput.placeholder = t('chat.placeholder');
+  ui.invite.title = t('btn.invite');
+  ui.transfer.title = t('btn.transfer');
+  ui.toRooms.title = t('room.change');
+  ui.mic.title = t('vol.voice');
+  $('#musicBtn').title = t('vol.music');
+  $('#voiceBtn').title = t('vol.voice');
+  ui.back15.title = t('tr.back15'); ui.play.title = t('tr.play');
+  ui.pause.title = t('tr.pause'); ui.stop.title = t('tr.stop'); ui.fwd15.title = t('tr.fwd15');
   $('#lblMusic').textContent = t('vol.music');
   $('#lblVoice').textContent = t('vol.voice');
   ui.duck.textContent = t('duck.badge');
   $('#diagTitle').textContent = t('diag.title');
   $('#diagHint').textContent = t('diag.hint');
-  ui.back15.title = t('tr.back15'); ui.back15.setAttribute('aria-label', t('tr.back15'));
-  ui.play.title = t('tr.play'); ui.play.setAttribute('aria-label', t('tr.play'));
-  ui.pause.title = t('tr.pause'); ui.pause.setAttribute('aria-label', t('tr.pause'));
-  ui.stop.title = t('tr.stop'); ui.stop.setAttribute('aria-label', t('tr.stop'));
-  ui.fwd15.title = t('tr.fwd15'); ui.fwd15.setAttribute('aria-label', t('tr.fwd15'));
   $('#inviteTitle').textContent = t('invite.title');
   $('#inviteNote').textContent = t('invite.note');
   $('#optSms').lastElementChild.textContent = t('invite.sms');
@@ -69,13 +71,13 @@ function applyLang() {
   $('#homeTag').textContent = t('home.tagline');
   $('#homeLead').textContent = t('home.lead');
   $('#goRooms').textContent = t('home.enter');
+  $('#goRooms2').textContent = t('home.enter');
   $('#roomsTitle').textContent = t('home.rooms');
   $('#roomsHint').textContent = t('home.roomshint');
   $('#backHome').textContent = t('home.back');
-  ui.toRooms.textContent = t('room.change');
   $('#tHolTitle').textContent = t('home.holidays');
   $('#tQuotesTitle').textContent = t('home.quotes');
-  [['Pyr', 'pyramid'], ['Sph', 'sphere'], ['Gar', 'garden']].forEach(function (p) {
+  [['Pyr', 'green'], ['Gld', 'gold'], ['Slv', 'silver']].forEach(function (p) {
     $('#rn' + p[0]).textContent = t('room.' + p[1]);
     $('#rd' + p[0]).textContent = t('room.' + p[1] + '.d');
   });
@@ -552,9 +554,9 @@ function renderTracks() {
 
 function renderRole(peers) {
   isMaster = selfId === masterId;
-  ui.role.textContent = isMaster ? t('role.master') : t('role.guest');
-  ui.peers.textContent = peers.length > 1 ? t('peers.two') : t('peers.alone');
-  ui.transfer.textContent = t('btn.transfer');
+  ui.rbRole.textContent = (isMaster ? t('role.master') : t('role.guest'))
+    + ' · ' + (peers.length > 1 ? t('peers.two') : t('peers.alone'));
+  ui.rbDot.classList.toggle('solo', peers.length < 2);
   document.body.classList.toggle('guest', !isMaster);
   ui.seek.disabled = !isMaster;
   ui.transfer.style.display = isMaster && peers.length > 1 ? '' : 'none';
@@ -627,7 +629,8 @@ setInterval(() => {
 ui.music.oninput = () => { if (musicGain) musicGain.gain.value = +ui.music.value / 100; };
 ui.voice.oninput = () => { remoteAudio.volume = +ui.voice.value / 100; };
 
-ui.mic.onclick = () => {
+ui.mic.onclick = e => {
+  e.stopPropagation();
   micOn = !micOn;
   if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
   ui.mic.setAttribute('aria-pressed', micOn ? 'true' : 'false');
@@ -638,13 +641,21 @@ ui.mic.onclick = () => {
 function renderMode() {
   ui.hp.setAttribute('aria-checked', headphones ? 'true' : 'false');
   ui.hpNow.textContent = headphones ? t('mode.headphones') : t('mode.speaker');
-  ui.hpOther.textContent = headphones ? t('mode.speaker') : t('mode.headphones');
+  ui.hpIc.textContent = headphones ? '🎧' : '🔈';
+  ui.hp.title = t('mode.hint');
   ui.hpHint.textContent = t('mode.hint');
+}
+/* подсказка про режим показывается на пару секунд, потом уходит с глаз */
+function flashHint() {
+  ui.hpHint.classList.add('on');
+  clearTimeout(flashHint._t);
+  flashHint._t = setTimeout(() => ui.hpHint.classList.remove('on'), 4000);
 }
 async function toggleMode() {
   headphones = !headphones;
   renderMode();
   try { await getMic(); } catch (e) { }
+  flashHint();
   toast(headphones ? t('toast.headphones') : t('toast.speaker'));
 }
 ui.hp.onclick = toggleMode;
@@ -653,6 +664,7 @@ ui.hp.onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefa
 ui.lang.onchange = () => { lang = ui.lang.value; applyLang(); };
 
 ui.transfer.onclick = () => ws.send(JSON.stringify({ type: 'transfer' }));
+$('#diagBtn').onclick = () => $('#diagSheet').classList.toggle('on');
 
 function inviteLink() { return location.origin + '/?room=' + encodeURIComponent(roomId); }
 
@@ -677,6 +689,11 @@ $('#inviteBack').onclick = e => { if (e.target === $('#inviteBack')) $('#inviteB
   $(id).addEventListener('click', () => setTimeout(() => $('#inviteBack').classList.remove('on'), 300));
 });
 
+ui.chatBox.addEventListener('click', e => {
+  if (e.target === ui.chatInput) return;
+  ui.chatBox.classList.toggle('open');
+  ui.chat.scrollTop = ui.chat.scrollHeight;
+});
 ui.chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && ui.chatInput.value.trim()) {
     ws.send(JSON.stringify({ type: 'chat', text: ui.chatInput.value.trim() }));
@@ -730,10 +747,52 @@ setInterval(async () => {
         + (pendingCandidates.length ? ', ' + t('diag.holding') + ' ' + pendingCandidates.length : ''))],
     [t('diag.stream'), !pc ? '—' : (gotRemote ? (remoteAudio.paused ? t('diag.streamsilent') : t('diag.streamplays')) : t('diag.streamnone'))],
     [t('diag.me'), pc ? (isInitiator ? t('diag.calling') : t('diag.answering')) : '—'],
-    [t('diag.aec'), headphones ? t('diag.aecoff') : t('diag.aecon')]
+    [t('diag.aec'), headphones ? t('diag.aecoff') : t('diag.aecon')],
+    [t('diag.level'), Math.round(lastLevel * 100) + '%' + (window.Scene.supported() ? ', ' + window.Scene.fps() + ' fps' : '')]
   ];
   ui.diag.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
 }, 1000);
+
+/* Фон главной — настоящий мрамор, тем же генератором, что и стены комнат.
+   Рисуется один раз, лежит картинкой и медленно плывёт. */
+function paintHero() {
+  const c = $('#heroMarble');
+  if (!c || !window.Scene || !window.Scene._marble) return;
+  const w = 900, h = 640;
+  try {
+    const set = window.Scene._marble(w, h, 1234, {
+      base: '#052A1B',
+      ramp: ['#01100A', '#04251A', '#0A4732', '#12704F', '#1F9A6C', '#63C39F', '#BCE4D0'],
+      hair: '#DCF0E6', crack: '#010D08', bands: 15, rivers: 10, masses: 14, ripples: 7, clump: .07, shade: 4
+    });
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(set.color, 0, 0);
+  } catch (e) { }
+}
+
+/* блоки появляются при прокрутке */
+function watchReveal() {
+  const items = document.querySelectorAll('.reveal');
+  if (!('IntersectionObserver' in window)) {
+    items.forEach(i => i.classList.add('seen'));
+    return;
+  }
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); io.unobserve(e.target); } });
+  }, { threshold: .15 });
+  items.forEach(i => io.observe(i));
+}
+
+/* логотип слегка ведёт за курсором */
+(function () {
+  const L = $('#heroLogo');
+  if (!L) return;
+  addEventListener('pointermove', e => {
+    if (document.body.classList.contains('in-room')) return;
+    const x = (e.clientX / innerWidth - .5) * 16, y = (e.clientY / innerHeight - .5) * 10;
+    L.style.transform = 'translate3d(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px,0)';
+  });
+})();
 
 /* ---------------- экраны ---------------- */
 function showView(name) {
@@ -750,7 +809,7 @@ function showView(name) {
 
 /* Анализатор висит на выходе музыки: стены разгораются от того же звука,
    который слышит человек, а не от выдуманного ритма. */
-let analyser = null, levelData = null;
+let analyser = null, levelData = null, lastLevel = 0;
 function attachAnalyser() {
   if (!actx || analyser) return;
   analyser = actx.createAnalyser();
@@ -765,7 +824,8 @@ setInterval(() => {
   let sum = 0;
   for (let i = 0; i < levelData.length; i++) { const v = (levelData[i] - 128) / 128; sum += v * v; }
   const rms = Math.sqrt(sum / levelData.length);
-  window.Scene.setLevel(Math.min(1, rms * 3.2));
+  lastLevel = Math.min(1, rms * 3.6);
+  window.Scene.setLevel(lastLevel);
   window.Scene.setPlaying(playing);
 }, 60);
 
@@ -782,6 +842,7 @@ async function enterRoom(style) {
 }
 
 ui.goRooms.onclick = () => showView('rooms');
+$('#goRooms2').onclick = () => showView('rooms');
 $('#backHome').onclick = () => showView('home');
 ui.toRooms.onclick = () => { if (isMaster) showView('rooms'); };
 document.querySelectorAll('[data-style]').forEach(b => {
@@ -828,5 +889,7 @@ window.LANGS.forEach(l => {
 });
 $('#name').value = localStorage.getItem('pyr-name') || '';
 applyLang();
+paintHero();
+watchReveal();
 if (!invitedDirectly) loadWeather();
 setInterval(renderToday, 60000);

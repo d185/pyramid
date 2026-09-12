@@ -20,13 +20,13 @@ const TRACKS = path.join(ROOT, 'tracks');
 
 /* ---------- демо-треки: делаются в памяти при первом запросе ---------- */
 const DEMOS = [
-  { id: 'demo-1-tishina.wav', title: 'Демо 1 · тишина', seconds: 60, voices: [
+  { id: 'demo-1-tishina.wav', title: 'Demo 1', seconds: 60, voices: [
     { f: 110, a: .34, lfo: .05, ph: 0 }, { f: 164.81, a: .22, lfo: .07, ph: 1 },
     { f: 220, a: .16, lfo: .04, ph: 2 }, { f: 329.63, a: .09, lfo: .09, ph: 3 }] },
-  { id: 'demo-2-potok.wav', title: 'Демо 2 · поток', seconds: 60, voices: [
+  { id: 'demo-2-potok.wav', title: 'Demo 2', seconds: 60, voices: [
     { f: 146.83, a: .30, lfo: .08, ph: 0 }, { f: 220, a: .20, lfo: .11, ph: 1.5 },
     { f: 293.66, a: .14, lfo: .06, ph: .5 }, { f: 440, a: .07, lfo: .13, ph: 2.5 }] },
-  { id: 'demo-3-sad.wav', title: 'Демо 3 · сад', seconds: 60, voices: [
+  { id: 'demo-3-sad.wav', title: 'Demo 3', seconds: 60, voices: [
     { f: 196, a: .28, lfo: .12, ph: 0 }, { f: 246.94, a: .19, lfo: .09, ph: 2 },
     { f: 392, a: .12, lfo: .15, ph: 1 }, { f: 587.33, a: .06, lfo: .2, ph: 3 }] }
 ];
@@ -184,7 +184,7 @@ function getRoom(id) {
   if (!rooms.has(id)) {
     rooms.set(id, {
       id, peers: new Map(), masterId: null,
-      state: { trackId: null, playing: false, offset: 0, startAt: 0 },
+      state: { trackId: null, playing: false, offset: 0, startAt: 0, style: 'pyramid' },
       chat: []
     });
   }
@@ -226,7 +226,10 @@ wss.on('connection', ws => {
       room = getRoom((m.room || 'main').slice(0, 64));
       selfId = crypto.randomBytes(6).toString('hex');
       room.peers.set(selfId, { ws, name: (m.name || 'Гость').slice(0, 40), ready: null, speaking: false });
-      if (!room.masterId) room.masterId = selfId;      // первый вошёл — тот и Мастер
+      if (!room.masterId) {
+        room.masterId = selfId;                        // первый вошёл — тот и Мастер
+        if (m.style) room.state.style = m.style;       // и он же выбирает комнату
+      }
       send(ws, {
         type: 'welcome', selfId, room: room.id,
         masterId: room.masterId, peers: peersInfo(room),
@@ -244,6 +247,12 @@ wss.on('connection', ws => {
       /* обмен SDP и кандидатами — сервер только пересылает */
       case 'signal':
         broadcast(room, { type: 'signal', from: selfId, data: m.data }, selfId);
+        break;
+
+      case 'style':
+        if (!isMaster) return;
+        st.style = m.style;
+        broadcast(room, { type: 'style', style: st.style }, selfId);
         break;
 
       case 'select':

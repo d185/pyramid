@@ -18,7 +18,8 @@
 5. Распакуйте архив `pyramid.zip` у себя на устройстве и **перетащите в окно
    браузера содержимое папки** `pyramid` — то есть файлы `server.js`,
    `package.json`, `package-lock.json`, `render.yaml`, `README.md` и папку
-   `public` целиком.
+   `public` целиком. В папке `public` должно быть пять файлов: `index.html`,
+   `app.js`, `i18n.js`, `day.js`, `scene.js`.
 6. Внизу нажмите **Commit changes**.
 
 Проверьте, что в репозитории видно `server.js` и папку `public` с двумя

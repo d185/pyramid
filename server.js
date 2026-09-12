@@ -75,13 +75,26 @@ function getDemo(id) {
 
 if (!fs.existsSync(TRACKS)) fs.mkdirSync(TRACKS, { recursive: true });
 
+const MEDITATIONS = path.join(TRACKS, 'meditations');
+if (!fs.existsSync(MEDITATIONS)) fs.mkdirSync(MEDITATIONS, { recursive: true });
+
 function listTracks() {
-  const demos = DEMOS.map(d => ({ id: d.id, title: d.title, url: '/tracks/' + d.id }));
+  const demos = DEMOS.map(d => ({ id: d.id, title: d.title, url: '/tracks/' + d.id, group: 'demo' }));
   const demoIds = new Set(DEMOS.map(d => d.id));
-  const files = fs.readdirSync(TRACKS)
+  const uploads = fs.readdirSync(TRACKS)
     .filter(f => AUDIO_RE.test(f) && !demoIds.has(f))
-    .map(f => ({ id: f, title: f.replace(/^[a-z0-9]+-/, '').replace(/\.[^.]+$/, ''), url: '/tracks/' + encodeURIComponent(f) }));
-  return demos.concat(files);
+    .map(f => ({
+      id: f, title: f.replace(/^[a-z0-9]+-/, '').replace(/\.[^.]+$/, ''),
+      url: '/tracks/' + encodeURIComponent(f), group: 'upload'
+    }));
+  // всё, что положено в tracks/meditations, попадает в левое меню
+  const med = fs.readdirSync(MEDITATIONS)
+    .filter(f => AUDIO_RE.test(f))
+    .map(f => ({
+      id: 'meditations/' + f, title: f.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
+      url: '/tracks/meditations/' + encodeURIComponent(f), group: 'meditation'
+    }));
+  return med.concat(demos, uploads);
 }
 
 /* ---------- статика ---------- */
@@ -163,6 +176,41 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (p === '/api/fetch' && req.method === 'POST') {
+    const raw = url.searchParams.get('url') || '';
+    let target;
+    try { target = new URL(raw); } catch (e) { res.writeHead(400); return res.end('это не ссылка'); }
+    if (!/^https?:$/.test(target.protocol)) { res.writeHead(400); return res.end('нужна ссылка http или https'); }
+    // не пускаем сервер стучаться внутрь себя и в локальную сеть
+    if (/^(localhost|0\.0\.0\.0|\[?::1\]?|10\.|127\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(target.hostname)) {
+      res.writeHead(400); return res.end('такой адрес недоступен');
+    }
+    fetch(target.href, { redirect: 'follow' }).then(async r => {
+      if (!r.ok) { res.writeHead(502); return res.end('источник ответил ' + r.status); }
+      const len = +(r.headers.get('content-length') || 0);
+      if (len > 80e6) { res.writeHead(413); return res.end('файл больше 80 МБ'); }
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 80e6) { res.writeHead(413); return res.end('файл больше 80 МБ'); }
+      let base = decodeURIComponent(target.pathname.split('/').pop() || 'track');
+      let ext = (base.match(/\.[A-Za-z0-9]{1,5}$/) || [''])[0].toLowerCase();
+      base = base.slice(0, base.length - ext.length).replace(/[^\wА-Яа-яЁё .\-]/g, '_').trim() || 'track';
+      if (!ext || !AUDIO_RE.test('x' + ext)) {
+        const ct = (r.headers.get('content-type') || '').split(';')[0];
+        ext = Object.keys(MIME).find(k => MIME[k] === ct) || '.mp3';
+      }
+      const name = Date.now().toString(36) + '-' + base + ext;
+      fs.writeFileSync(path.join(TRACKS, name), buf);
+      console.log('скачан по ссылке', name, Math.round(buf.length / 1e6) + ' МБ');
+      broadcastAll({ type: 'tracks', tracks: listTracks() });
+      res.writeHead(200, { 'Content-Type': MIME['.json'] });
+      res.end(JSON.stringify({ id: name, title: base }));
+    }).catch(e => { res.writeHead(502); res.end('не смог забрать файл'); });
+    return;
+  }
+
+  if (p.startsWith('/tracks/meditations/')) {
+    return serveFile(res, path.join(MEDITATIONS, path.basename(p)));
+  }
   if (p.startsWith('/tracks/')) {
     const name = path.basename(p);
     const demo = getDemo(name);

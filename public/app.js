@@ -10,6 +10,16 @@
  */
 
 const $ = s => document.querySelector(s);
+
+/* Одна невидимая ошибка однажды убила половину приложения.
+   Теперь любая всплывает на экран, а не прячется в журнале. */
+window.addEventListener('error', e => {
+  const box = document.querySelector('#toast');
+  if (!box) return;
+  box.textContent = '⚠ ' + (e.message || 'ошибка');
+  box.classList.add('on');
+  setTimeout(() => box.classList.remove('on'), 6000);
+});
 const fmt = s => (s < 0 ? '0:00' : Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'));
 
 const ui = {
@@ -48,9 +58,14 @@ function applyLang() {
   $('#miFile').textContent = t('add.file');
   $('#miUrl').textContent = t('add.url');
   ui.chatInput.placeholder = t('chat.placeholder');
+  $('#invLbl').textContent = t('btn.invite');
+  $('#trfLbl').textContent = t('btn.transfer');
+  $('#rmLbl').textContent = t('room.change');
   ui.invite.title = t('btn.invite');
   ui.transfer.title = t('btn.transfer');
   ui.toRooms.title = t('room.change');
+  $('#diagBtn').title = t('diag.title');
+  $('#chatMore').title = t('chat.title');
   ui.mic.title = t('vol.voice');
   $('#musicBtn').title = t('vol.music');
   $('#voiceBtn').title = t('vol.voice');
@@ -537,20 +552,51 @@ function connect() {
 setInterval(ping, 2000);
 
 /* ---------------- интерфейс ---------------- */
+/* Левая кнопка: медитации, демо и загрузки. Файлы, положенные в
+   tracks/meditations на сервере, попадают в первую группу. */
 function renderTracks() {
-  ui.tracks.innerHTML = '';
-  tracks.forEach(t => {
-    const b = document.createElement('button');
-    b.className = 'item';
-    b.innerHTML = '<span class="art"></span><span class="cap">' + t.title + '</span>';
-    if (currentTrack && t.id === currentTrack.id) b.setAttribute('aria-current', 'true');
-    b.onclick = () => {
-      if (needMaster()) return;
-      ws.send(JSON.stringify({ type: 'select', trackId: t.id }));
-    };
-    ui.tracks.appendChild(b);
+  if (!ui.libMenu) return;
+  const groups = [
+    { key: 'lib.meditations', items: tracks.filter(x => x.group === 'meditation') },
+    { key: 'lib.demos', items: tracks.filter(x => x.group === 'demo') },
+    { key: 'lib.uploads', items: tracks.filter(x => x.group === 'upload') }
+  ];
+  let html = '';
+  groups.forEach(g => {
+    if (!g.items.length && g.key !== 'lib.meditations') return;
+    html += '<div class="gh">' + t(g.key) + '</div>';
+    if (!g.items.length) { html += '<div class="mi empty">' + t('lib.nomeditations') + '</div>'; return; }
+    g.items.forEach(x => {
+      const cur = currentTrack && x.id === currentTrack.id ? ' aria-current="true"' : '';
+      html += '<button class="mi" data-track="' + encodeURIComponent(x.id) + '"' + cur + '>' + x.title + '</button>';
+    });
   });
+  ui.libMenu.innerHTML = html;
+  ui.libMenu.querySelectorAll('[data-track]').forEach(b => {
+    b.onclick = () => {
+      closeDrops();
+      if (needMaster()) return;
+      ws.send(JSON.stringify({ type: 'select', trackId: decodeURIComponent(b.dataset.track) }));
+    };
+  });
+  if (ui.libCount) ui.libCount.textContent = tracks.length ? String(tracks.length) : '';
 }
+
+/* ---------- выпадающие меню ---------- */
+function closeDrops() {
+  document.querySelectorAll('.drop').forEach(d => d.classList.remove('open'));
+  const u = $('#urlBox'); if (u) u.classList.remove('on');
+}
+function toggleDrop(el) {
+  const open = el.classList.contains('open');
+  closeDrops();
+  if (!open) el.classList.add('open');
+}
+document.addEventListener('click', e => {
+  const trigger = e.target.closest('[data-drop]');
+  if (trigger) { toggleDrop($('#' + trigger.dataset.drop)); return; }
+  if (!e.target.closest('.menu')) closeDrops();
+});
 
 function renderRole(peers) {
   isMaster = selfId === masterId;
@@ -559,8 +605,8 @@ function renderRole(peers) {
   ui.rbDot.classList.toggle('solo', peers.length < 2);
   document.body.classList.toggle('guest', !isMaster);
   ui.seek.disabled = !isMaster;
-  ui.transfer.style.display = isMaster && peers.length > 1 ? '' : 'none';
-  if (document.body.classList.contains('in-room')) ui.toRooms.style.display = isMaster ? '' : 'none';
+  ui.transfer.hidden = !(isMaster && peers.length > 1);
+  ui.toRooms.hidden = !isMaster;
 }
 
 function addChat(msg) {
@@ -631,6 +677,7 @@ ui.voice.oninput = () => { remoteAudio.volume = +ui.voice.value / 100; };
 
 ui.mic.onclick = e => {
   e.stopPropagation();
+  closeDrops();
   micOn = !micOn;
   if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
   ui.mic.setAttribute('aria-pressed', micOn ? 'true' : 'false');
@@ -641,7 +688,7 @@ ui.mic.onclick = e => {
 function renderMode() {
   ui.hp.setAttribute('aria-checked', headphones ? 'true' : 'false');
   ui.hpNow.textContent = headphones ? t('mode.headphones') : t('mode.speaker');
-  ui.hpIc.textContent = headphones ? '🎧' : '🔈';
+  ui.hpIc.innerHTML = $(headphones ? '#icHp' : '#icSpk').innerHTML;
   ui.hp.title = t('mode.hint');
   ui.hpHint.textContent = t('mode.hint');
 }
@@ -662,6 +709,22 @@ ui.hp.onclick = toggleMode;
 ui.hp.onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleMode(); } };
 
 ui.lang.onchange = () => { lang = ui.lang.value; applyLang(); };
+
+$('#miFile').onclick = () => { closeDrops(); $('#upload').click(); };
+$('#miUrl').onclick = e => { e.stopPropagation(); $('#urlBox').classList.toggle('on'); $('#urlInput').focus(); };
+$('#urlGo').onclick = async () => {
+  const u = $('#urlInput').value.trim();
+  if (!u) return;
+  closeDrops(); $('#urlInput').value = ''; toast(t('toast.fetching'));
+  try {
+    const r = await fetch('/api/fetch?url=' + encodeURIComponent(u), { method: 'POST' });
+    const txt = await r.text();
+    if (!r.ok) return toast(t('toast.uploadfail', { e: txt }));
+    const j = JSON.parse(txt);
+    toast(t('toast.uploaded'));
+    if (isMaster) ws.send(JSON.stringify({ type: 'select', trackId: j.id }));
+  } catch (e) { toast(t('toast.uploaderr')); }
+};
 
 ui.transfer.onclick = () => ws.send(JSON.stringify({ type: 'transfer' }));
 $('#diagBtn').onclick = () => $('#diagSheet').classList.toggle('on');
@@ -689,11 +752,12 @@ $('#inviteBack').onclick = e => { if (e.target === $('#inviteBack')) $('#inviteB
   $(id).addEventListener('click', () => setTimeout(() => $('#inviteBack').classList.remove('on'), 300));
 });
 
-ui.chatBox.addEventListener('click', e => {
-  if (e.target === ui.chatInput) return;
+function toggleChat() {
   ui.chatBox.classList.toggle('open');
   ui.chat.scrollTop = ui.chat.scrollHeight;
-});
+}
+$('#chatMore').onclick = e => { e.stopPropagation(); toggleChat(); };
+ui.chat.onclick = toggleChat;
 ui.chatInput.addEventListener('keydown', e => {
   if (e.key === 'Enter' && ui.chatInput.value.trim()) {
     ws.send(JSON.stringify({ type: 'chat', text: ui.chatInput.value.trim() }));
@@ -761,9 +825,9 @@ function paintHero() {
   const w = 900, h = 640;
   try {
     const set = window.Scene._marble(w, h, 1234, {
-      base: '#052A1B',
-      ramp: ['#01100A', '#04251A', '#0A4732', '#12704F', '#1F9A6C', '#63C39F', '#BCE4D0'],
-      hair: '#DCF0E6', crack: '#010D08', bands: 15, rivers: 10, masses: 14, ripples: 7, clump: .07, shade: 4
+      base: '#03190F',
+      ramp: ['#000A06', '#02160E', '#05291B', '#0A4030', '#115940', '#1C7A57', '#39A075'],
+      hair: '#8FD6B8', crack: '#000703', bands: 15, rivers: 12, masses: 13, ripples: 7, clump: .09, shade: 6
     });
     c.width = w; c.height = h;
     c.getContext('2d').drawImage(set.color, 0, 0);
@@ -801,8 +865,9 @@ function showView(name) {
   });
   const inRoom = name === 'room';
   document.body.classList.toggle('in-room', inRoom);
-  ui.toRooms.style.display = inRoom && isMaster ? '' : 'none';
-  ui.invite.style.display = inRoom ? '' : 'none';
+  ui.toRooms.hidden = !(inRoom && isMaster);
+  ui.invite.hidden = !inRoom;
+  ui.transfer.hidden = true;
   if (!inRoom) window.Scene.dispose();
   window.scrollTo(0, 0);
 }

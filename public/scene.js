@@ -278,10 +278,10 @@ window.Scene = (function () {
 
   var PALETTE = {
     green: {
-      wall: { base: '#052A1B', ramp: ['#01100A', '#04251A', '#0A4732', '#12704F', '#1F9A6C', '#63C39F', '#BCE4D0'],
-              hair: '#DCF0E6', crack: '#010D08', bands: 17, rivers: 11, masses: 15, ripples: 8, clump: .075, shade: 5 },
-      floor: { base: '#03190F', ramp: ['#000704', '#02150D', '#062E1E', '#0B4832', '#116348', '#2F7D60'],
-               hair: '#9FC5B3', crack: '#000502', bands: 11, rivers: 5, masses: 9, ripples: 4, clump: .05 },
+      wall: { base: '#03190F', ramp: ['#000A06', '#02160E', '#05291B', '#0A4030', '#115940', '#1C7A57', '#39A075'],
+              hair: '#8FD6B8', crack: '#000703', bands: 16, rivers: 13, masses: 14, ripples: 7, clump: .09, shade: 7 },
+      floor: { base: '#020F09', ramp: ['#000402', '#010C07', '#031C12', '#062C1E', '#0A402D', '#175C43'],
+               hair: '#6FB89A', crack: '#000402', bands: 11, rivers: 6, masses: 9, ripples: 4, clump: .07 },
       fog: 0x02110A, bg: 0x010A06, ambient: 0x1A7350, amb: .5,
       key: 0xFFE6A8, accent: 0x7CF0C4, rim: 0x2FBF8E, warm: 0xE0A84A,
       veinColor: 0xE9C86E, shaftRGB: 'rgba(255,236,180,', env: ['#F6E7B8', '#3E7A5E', '#02100A'], dust: 0

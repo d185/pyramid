@@ -11,6 +11,7 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'btn.exit': 'Leave',
     'lib.btn': 'Library',
     'lib.meditations': 'Meditations · edinstvo.net',
     'lib.demos': 'Demo tracks',
@@ -153,6 +154,7 @@ window.I18N = {
   },
 
   ru: {
+    'btn.exit': 'Выйти',
     'lib.btn': 'Фонотека',
     'lib.meditations': 'Медитации · edinstvo.net',
     'lib.demos': 'Демо-треки',
@@ -295,6 +297,7 @@ window.I18N = {
   },
 
   es: {
+    'btn.exit': 'Salir',
     'lib.btn': 'Biblioteca',
     'lib.meditations': 'Meditaciones · edinstvo.net',
     'lib.demos': 'Pistas de demostración',
@@ -437,6 +440,7 @@ window.I18N = {
   },
 
   fr: {
+    'btn.exit': 'Sortir',
     'lib.btn': 'Bibliothèque',
     'lib.meditations': 'Méditations · edinstvo.net',
     'lib.demos': 'Morceaux de démonstration',
@@ -579,6 +583,7 @@ window.I18N = {
   },
 
   de: {
+    'btn.exit': 'Verlassen',
     'lib.btn': 'Bibliothek',
     'lib.meditations': 'Meditationen · edinstvo.net',
     'lib.demos': 'Demo-Titel',

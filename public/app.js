@@ -28,10 +28,11 @@ const ui = {
   chat: $('#chat'), chatInput: $('#chatInput'),
   music: $('#music'), voice: $('#voice'), duck: $('#duck'), diag: $('#diag'), invite: $('#invite'),
   transfer: $('#transfer'), upload: $('#upload'), lang: $('#lang'),
-  hp: $('#hpSwitch'), hpNow: $('#hpNow'), hpHint: $('#hpHint'), hpIc: $('#hpIc'),
+  hpSpk: $('#hpSpk'), hpHp: $('#hpHp'),
   toRooms: $('#toRooms'), goRooms: $('#goRooms'), backHome: $('#backHome'),
   mic: $('#micBtn'), chatBox: $('#chatBox'), rbRole: $('#rbRole'), rbDot: $('#rbDot'),
-  libMenu: $('#libMenu'), libLbl: $('#libLbl'), addLbl: $('#addLbl')
+  libMenu: $('#libMenu'), libLbl: $('#libLbl'), addLbl: $('#addLbl'),
+  exit: $('#exitBtn'), micKnob: $('#micBtn')
 };
 
 var roomStyle = 'green';   // какая комната открыта у обоих
@@ -60,19 +61,21 @@ function applyLang() {
   ui.chatInput.placeholder = t('chat.placeholder');
   $('#invLbl').textContent = t('btn.invite');
   $('#trfLbl').textContent = t('btn.transfer');
-  $('#rmLbl').textContent = t('room.change');
   ui.invite.title = t('btn.invite');
   ui.transfer.title = t('btn.transfer');
   ui.toRooms.title = t('room.change');
   $('#diagBtn').title = t('diag.title');
-  $('#chatMore').title = t('chat.title');
-  ui.mic.title = t('vol.voice');
+  $('#exitLbl').textContent = t('btn.exit');
+  ui.hpSpk.title = t('mode.speaker');
+  ui.hpHp.title = t('mode.headphones');
+  $('#musicBtn').title = t('vol.music');
+  $('#voiceBtn').title = t('vol.voice');
+  $('#micBtn').title = t('vol.voice');
+  ui.chatInput.placeholder = t('chat.placeholder');
   $('#musicBtn').title = t('vol.music');
   $('#voiceBtn').title = t('vol.voice');
   ui.back15.title = t('tr.back15'); ui.play.title = t('tr.play');
   ui.pause.title = t('tr.pause'); ui.stop.title = t('tr.stop'); ui.fwd15.title = t('tr.fwd15');
-  $('#lblMusic').textContent = t('vol.music');
-  $('#lblVoice').textContent = t('vol.voice');
   ui.duck.textContent = t('duck.badge');
   $('#diagTitle').textContent = t('diag.title');
   $('#diagHint').textContent = t('diag.hint');
@@ -519,7 +522,7 @@ function connect() {
         peerSpeaking = false; applyDuck();
         break;
 
-      case 'note': addChat({ from: t('chat.system'), text: m.text }); break;
+      case 'note': addChat({ from: '', text: m.text, sys: true }); break;
 
       case 'style':
         roomStyle = m.style;
@@ -605,14 +608,16 @@ function renderRole(peers) {
   ui.rbDot.classList.toggle('solo', peers.length < 2);
   document.body.classList.toggle('guest', !isMaster);
   ui.seek.disabled = !isMaster;
+  ui.seek.disabled = !isMaster;
   ui.transfer.hidden = !(isMaster && peers.length > 1);
   ui.toRooms.hidden = !isMaster;
 }
 
 function addChat(msg) {
   const d = document.createElement('div');
-  d.className = 'msg';
-  d.innerHTML = '<b>' + msg.from + ':</b> ' + msg.text.replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+  const mine = msg.from === (localStorage.getItem('pyr-name') || '');
+  d.className = 'bub ' + (msg.sys ? 'sys' : mine ? 'me' : 'them');
+  d.textContent = msg.sys ? msg.text : msg.text;
   ui.chat.appendChild(d);
   ui.chat.scrollTop = ui.chat.scrollHeight;
 }
@@ -672,41 +677,46 @@ setInterval(() => {
   ui.fwd15.disabled = !can;
 }, 300);
 
-ui.music.oninput = () => { if (musicGain) musicGain.gain.value = +ui.music.value / 100; };
-ui.voice.oninput = () => { remoteAudio.volume = +ui.voice.value / 100; };
+ui.music.oninput = () => {
+  if (musicGain) musicGain.gain.value = +ui.music.value / 100;
+  $('#musicVal').textContent = ui.music.value;
+};
+ui.voice.oninput = () => {
+  remoteAudio.volume = +ui.voice.value / 100;
+  $('#voiceVal').textContent = ui.voice.value;
+};
 
-ui.mic.onclick = e => {
-  e.stopPropagation();
-  closeDrops();
+ui.mic.onclick = () => {
   micOn = !micOn;
   if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
-  ui.mic.setAttribute('aria-pressed', micOn ? 'true' : 'false');
+  ui.mic.setAttribute('aria-checked', micOn ? 'true' : 'false');
+  ui.mic.querySelector('.mknob').innerHTML = $(micOn ? '#icMic' : '#icMicOff').innerHTML;
   if (!micOn && selfSpeaking) setSelfSpeaking(false);
   toast(micOn ? t('toast.micon') : t('toast.micoff'));
 };
 
+/* громкость: нажатие раскрывает ползунок под строкой кнопок */
+function toggleSlide(which) {
+  const a = $('#' + which + 'Slide'), other = $(which === 'music' ? '#voiceSlide' : '#musicSlide');
+  other.classList.remove('on');
+  a.classList.toggle('on');
+}
+$('#musicBtn').onclick = () => toggleSlide('music');
+$('#voiceBtn').onclick = () => toggleSlide('voice');
+
 function renderMode() {
-  ui.hp.setAttribute('aria-checked', headphones ? 'true' : 'false');
-  ui.hpNow.textContent = headphones ? t('mode.headphones') : t('mode.speaker');
-  ui.hpIc.innerHTML = $(headphones ? '#icHp' : '#icSpk').innerHTML;
-  ui.hp.title = t('mode.hint');
-  ui.hpHint.textContent = t('mode.hint');
+  ui.hpSpk.classList.toggle('on', !headphones);
+  ui.hpHp.classList.toggle('on', headphones);
 }
-/* подсказка про режим показывается на пару секунд, потом уходит с глаз */
-function flashHint() {
-  ui.hpHint.classList.add('on');
-  clearTimeout(flashHint._t);
-  flashHint._t = setTimeout(() => ui.hpHint.classList.remove('on'), 4000);
-}
-async function toggleMode() {
-  headphones = !headphones;
+async function setMode(hp) {
+  if (headphones === hp) return;
+  headphones = hp;
   renderMode();
   try { await getMic(); } catch (e) { }
-  flashHint();
   toast(headphones ? t('toast.headphones') : t('toast.speaker'));
 }
-ui.hp.onclick = toggleMode;
-ui.hp.onkeydown = e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggleMode(); } };
+ui.hpSpk.onclick = () => setMode(false);
+ui.hpHp.onclick = () => setMode(true);
 
 ui.lang.onchange = () => { lang = ui.lang.value; applyLang(); };
 
@@ -724,6 +734,14 @@ $('#urlGo').onclick = async () => {
     toast(t('toast.uploaded'));
     if (isMaster) ws.send(JSON.stringify({ type: 'select', trackId: j.id }));
   } catch (e) { toast(t('toast.uploaderr')); }
+};
+
+ui.exit.onclick = () => {
+  window.Scene.dispose();
+  if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { } ws = null; }
+  history.replaceState(null, '', '/');
+  showView('home');
+  loadWeather();
 };
 
 ui.transfer.onclick = () => ws.send(JSON.stringify({ type: 'transfer' }));
@@ -752,17 +770,19 @@ $('#inviteBack').onclick = e => { if (e.target === $('#inviteBack')) $('#inviteB
   $(id).addEventListener('click', () => setTimeout(() => $('#inviteBack').classList.remove('on'), 300));
 });
 
-function toggleChat() {
+ui.chatBox.onclick = e => {
+  if (e.target.closest('.send')) return;
   ui.chatBox.classList.toggle('open');
   ui.chat.scrollTop = ui.chat.scrollHeight;
-}
-$('#chatMore').onclick = e => { e.stopPropagation(); toggleChat(); };
-ui.chat.onclick = toggleChat;
+};
+$('#chatSend').onclick = e => {
+  e.stopPropagation();
+  if (!ui.chatInput.value.trim()) return;
+  ws.send(JSON.stringify({ type: 'chat', text: ui.chatInput.value.trim() }));
+  ui.chatInput.value = '';
+};
 ui.chatInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && ui.chatInput.value.trim()) {
-    ws.send(JSON.stringify({ type: 'chat', text: ui.chatInput.value.trim() }));
-    ui.chatInput.value = '';
-  }
+  if (e.key === 'Enter') $('#chatSend').click();
 });
 
 ui.upload.onchange = () => {
@@ -819,19 +839,29 @@ setInterval(async () => {
 
 /* Фон главной — настоящий мрамор, тем же генератором, что и стены комнат.
    Рисуется один раз, лежит картинкой и медленно плывёт. */
-function paintHero() {
-  const c = $('#heroMarble');
-  if (!c || !window.Scene || !window.Scene._marble) return;
-  const w = 900, h = 640;
-  try {
-    const set = window.Scene._marble(w, h, 1234, {
-      base: '#03190F',
-      ramp: ['#000A06', '#02160E', '#05291B', '#0A4030', '#115940', '#1C7A57', '#39A075'],
-      hair: '#8FD6B8', crack: '#000703', bands: 15, rivers: 12, masses: 13, ripples: 7, clump: .09, shade: 6
+/* Фон главной и грани логотипа — тот же камень, испечённый видеокартой.
+   Считается один раз за доли секунды, картинок не скачивается. */
+function paintMarbleArt() {
+  if (!window.Scene || !window.Scene.supported()) return;
+  const hero = $('#heroMarble');
+  const img = window.Scene.image('green', 512, 384);
+  if (hero && img) {
+    hero.width = 512; hero.height = 384;
+    hero.getContext('2d').drawImage(img, 0, 0);
+  }
+  const small = window.Scene.image('green', 128, 200);
+  if (small) {
+    const url = small.toDataURL();
+    document.querySelectorAll('.pyr .face').forEach(f => {
+      f.style.backgroundImage = 'url(' + url + ')';
+      f.style.backgroundSize = 'cover';
     });
-    c.width = w; c.height = h;
-    c.getContext('2d').drawImage(set.color, 0, 0);
-  } catch (e) { }
+  }
+  [['bgPyr', 'green'], ['bgGld', 'gold'], ['bgSlv', 'silver']].forEach(p => {
+    const el = $('#' + p[0]);
+    const c = window.Scene.image(p[1], 256, 240);
+    if (el && c) { el.style.backgroundImage = 'url(' + c.toDataURL() + ')'; el.style.backgroundSize = 'cover'; }
+  });
 }
 
 /* блоки появляются при прокрутке */
@@ -954,7 +984,7 @@ window.LANGS.forEach(l => {
 });
 $('#name').value = localStorage.getItem('pyr-name') || '';
 applyLang();
-paintHero();
+paintMarbleArt();
 watchReveal();
 if (!invitedDirectly) loadWeather();
 setInterval(renderToday, 60000);

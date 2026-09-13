@@ -150,15 +150,16 @@ body.in-room .notebook{background:linear-gradient(178deg,rgba(244,235,212,.94),r
 
 /* вращающаяся пирамида-логотип */
 .pyr-stage{perspective:900px;display:flex;justify-content:center;align-items:flex-end}
-.pyr{--s:34px;position:relative;width:var(--s);height:calc(var(--s)*.9);transform-style:preserve-3d;
+.pyr{--s:34px;position:relative;width:var(--s);height:calc(var(--s)*1.55);transform-style:preserve-3d;
   animation:pyrSpin 30s linear infinite}
-.pyr .face{position:absolute;left:0;bottom:0;width:var(--s);height:calc(var(--s)*1.03);
+.pyr .face{position:absolute;left:0;bottom:0;width:var(--s);height:calc(var(--s)*1.58);
   clip-path:polygon(50% 0,100% 100%,0 100%);transform-origin:50% 100%;
-  background:linear-gradient(168deg,#1B6E51,#0B3A29 38%,#17805C 62%,#062419)}
-.pyr .face:nth-child(1){transform:rotateY(0deg) translateZ(calc(var(--s)/2)) rotateX(29deg)}
-.pyr .face:nth-child(2){transform:rotateY(90deg) translateZ(calc(var(--s)/2)) rotateX(29deg);filter:brightness(.78)}
-.pyr .face:nth-child(3){transform:rotateY(180deg) translateZ(calc(var(--s)/2)) rotateX(29deg);filter:brightness(.6)}
-.pyr .face:nth-child(4){transform:rotateY(270deg) translateZ(calc(var(--s)/2)) rotateX(29deg);filter:brightness(.86)}
+  background:linear-gradient(168deg,#1B6E51,#0B3A29 38%,#17805C 62%,#062419);
+  background-size:cover;background-position:center}
+.pyr .face:nth-child(1){transform:rotateY(0deg) translateZ(calc(var(--s)/2)) rotateX(18deg)}
+.pyr .face:nth-child(2){transform:rotateY(90deg) translateZ(calc(var(--s)/2)) rotateX(18deg);filter:brightness(.8)}
+.pyr .face:nth-child(3){transform:rotateY(180deg) translateZ(calc(var(--s)/2)) rotateX(18deg);filter:brightness(.62)}
+.pyr .face:nth-child(4){transform:rotateY(270deg) translateZ(calc(var(--s)/2)) rotateX(18deg);filter:brightness(.88)}
 .pyr .face svg{position:absolute;inset:0;width:100%;height:100%}
 @keyframes pyrSpin{to{transform:rotateY(360deg)}}
 
@@ -185,214 +186,142 @@ body.in-room .notebook{background:linear-gradient(178deg,rgba(244,235,212,.94),r
 .perk{font-size:13.5px;color:#9CBBAD;display:flex;gap:9px;align-items:flex-start;line-height:1.45}
 .perk .ic{color:var(--gold-300);flex:none}
 .portals{display:grid;gap:14px}
-.portal{position:relative;border:1px solid rgba(224,200,120,.22);border-radius:120px 120px 6px 6px;
-  overflow:hidden;cursor:pointer;background:none;padding:0;min-height:210px;width:100%;text-align:left;color:inherit}
+.portal{position:relative;border:none;overflow:hidden;cursor:pointer;background:none;padding:0;
+  width:100%;aspect-ratio:1/.92;clip-path:polygon(50% 0,100% 100%,0 100%);color:inherit;
+  transition:transform .2s}
+.portal:hover{transform:translateY(-4px)}
 .portal canvas,.portal .bg{position:absolute;inset:0;width:100%;height:100%}
-.portal .plate{position:absolute;left:0;right:0;bottom:0;padding:14px 16px;
+.portal .plate{position:absolute;left:0;right:0;bottom:0;padding:10px 8px 8px;
   background:linear-gradient(0deg,rgba(3,10,7,.94),rgba(3,10,7,0))}
-.portal h3{font-size:23px}
-.portal p{font-size:13px;color:#A9C4B8;margin-top:3px}
-.portal:hover{border-color:var(--gold-300)}
+.portal h3{font-size:17px}
+.portal p{font-size:11px;color:#A9C4B8;margin-top:2px;line-height:1.35}
 
-/* ================= КОМНАТА: одна панель посередине ================= */
-body.in-room .wrap{max-width:none;padding:0;height:100vh;display:flex;flex-direction:column;
-  align-items:center;justify-content:center}
-body.in-room .top{position:fixed;top:0;left:0;right:0;margin:0;padding:8px 12px;z-index:6;
-  background:linear-gradient(180deg,rgba(3,12,9,.72),transparent)}
-body.in-room .brand{font-size:19px}
+/* ================= КОМНАТА ================= */
+body.in-room .wrap{max-width:none;padding:0;height:100vh;height:100dvh;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:10px}
+body.in-room .top{display:none}
 body.in-room .card{background:none;border:none;padding:0;margin:0}
 
-.room-bar{position:fixed;top:46px;left:50%;transform:translateX(-50%);z-index:6;
-  display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:99px;
+.room-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;
+  padding:6px 8px;border-radius:16px;width:min(520px,calc(100vw - 20px));
   background:rgba(6,22,15,.55);border:1px solid rgba(246,231,184,.22);backdrop-filter:blur(14px);
-  max-width:calc(100vw - 20px)}
-.rb-room{display:flex;align-items:center;gap:7px;font-size:12.5px;color:#BCD5C8;padding:0 6px;white-space:nowrap}
-.rb-room .dot{width:7px;height:7px;border-radius:50%;background:var(--jade);box-shadow:0 0 8px var(--jade)}
+  position:relative;z-index:6}
+body.guest .room-bar{width:300px}
+.rb-room{font-size:11.5px;color:#BCD5C8;display:flex;align-items:center;gap:6px;padding:0 3px;white-space:nowrap}
+.rb-room .dot{width:6px;height:6px;border-radius:50%;background:var(--jade);box-shadow:0 0 7px var(--jade)}
 .rb-room .dot.solo{background:#7d8f88;box-shadow:none}
-.rb-sep{width:1px;height:18px;background:rgba(255,255,255,.16)}
-.rb-hint{position:fixed;top:86px;left:50%;transform:translateX(-50%);z-index:5;max-width:min(420px,92vw);
-  text-align:center;font-size:11.5px;color:#7FA294;line-height:1.4;opacity:0;transition:.25s;pointer-events:none}
-.rb-hint.on{opacity:1}
-
-.ib{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:99px;cursor:pointer;
-  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#E7F2EB;font-size:12.5px}
+body.guest .rb-room{display:none}
+.ib{display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:99px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#E7F2EB;font-size:11.5px}
 .ib:hover{border-color:var(--gold-300)}
-.ib-ic{font-size:14px;line-height:1}
-.ib[aria-checked="true"],.ib[aria-pressed="true"]{border-color:var(--jade);color:#CFF6E6}
-#micBtn[aria-pressed="false"]{opacity:.45}
+.ib svg{width:15px;height:15px;flex:none}
+.ib.only{padding:0;width:30px;justify-content:center}
+.ib.exit{border-color:rgba(255,170,150,.32);color:#F2CEC4}
+.ib[hidden]{display:none}
+body.guest .ib:not(.exit){display:none}
+
+/* режим звука: две пиктограммы, видно какая выбрана */
+.seg{display:inline-flex;padding:2px;border-radius:99px;background:rgba(0,0,0,.32);
+  border:1px solid rgba(255,255,255,.14);flex:none}
+.seg button{width:34px;height:26px;display:grid;place-items:center;border:none;border-radius:99px;
+  cursor:pointer;background:none;color:#9FBCB0}
+.seg button svg{width:15px;height:15px}
+.seg button.on{background:linear-gradient(140deg,var(--jade),#1E8A67);color:#05261B}
 
 /* пульт */
-.console{width:min(360px,calc(100vw - 24px));position:relative;z-index:4;
-  padding:14px 14px 12px;border-radius:14px;
-  background:linear-gradient(180deg,rgba(8,30,21,.60),rgba(3,14,10,.74));
+.console{width:290px;position:relative;z-index:4;padding:12px;border-radius:14px;
+  background:linear-gradient(180deg,rgba(8,30,21,.62),rgba(3,14,10,.78));
   border:1px solid rgba(246,231,184,.22);backdrop-filter:blur(16px);
-  box-shadow:0 30px 70px -34px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,246,216,.14)}
-.cs-now{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.cs-now b{font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cs-now span{font-size:11.5px;color:#9CBBAD;white-space:nowrap}
-#seek{width:100%;accent-color:var(--gold-500);margin:8px 0 0;height:18px}
-#seek:disabled{opacity:.35}
-.cs-time{display:flex;justify-content:space-between;font-size:10.5px;color:#8FB5A5}
-.cs-row{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:10px}
-.cs-row.two{gap:8px}
-.cs-row.vols{justify-content:flex-start;margin-top:10px;gap:6px;position:relative}
-.cb{height:36px;min-width:36px;padding:0 9px;border-radius:99px;cursor:pointer;font-size:11.5px;
-  border:1px solid rgba(246,231,184,.3);background:rgba(255,255,255,.05);color:#EFE6CE;
-  display:grid;place-items:center}
+  box-shadow:0 30px 70px -34px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,246,216,.12)}
+.cs-title{font-size:13px;font-weight:500;line-height:1.35;min-height:18px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cs-state{font-size:10.5px;color:#9CBBAD;margin-top:2px}
+#seek{width:100%;accent-color:var(--gold-500);margin:7px 0 1px;height:14px}
+#seek:disabled{opacity:.45}
+.cs-time{display:flex;justify-content:space-between;font-size:10px;color:#8FB5A5}
+.row{display:flex;gap:6px;align-items:center;justify-content:center;margin-top:9px}
+body.guest .master-only{display:none}
+.cb{height:32px;min-width:32px;padding:0 8px;border-radius:99px;cursor:pointer;font-size:10.5px;
+  border:1px solid rgba(246,231,184,.3);background:rgba(255,255,255,.05);color:#EFE6CE;display:grid;place-items:center}
 .cb:hover{border-color:var(--gold-300)}
-.cb:disabled{opacity:.28;cursor:not-allowed}
-.cb svg{width:15px;height:15px}
-.cb.big{width:42px;height:42px;min-width:42px;border:none;color:#241A06;
+.cb:disabled{opacity:.3;cursor:not-allowed}
+.cb svg{width:13px;height:13px}
+.cb.big{width:38px;height:38px;min-width:38px;border:none;color:#241A06;
   background:radial-gradient(circle at 36% 30%,var(--gold-100),var(--gold-300) 42%,var(--gold-500))}
 .cb.big:disabled{background:rgba(255,255,255,.08);color:#9CBBAD}
-.cb.big svg{width:16px;height:16px}
 
-/* выпадающие меню */
+/* фонотека и добавление */
 .drop{position:relative;flex:1}
-.drop.up{flex:none}
-.db{width:100%;height:34px;display:flex;align-items:center;justify-content:center;gap:7px;
-  border-radius:8px;cursor:pointer;font-size:12px;
-  border:1px solid rgba(246,231,184,.26);background:rgba(255,255,255,.05);color:#EBDCB6}
+.db{width:100%;height:31px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:8px;
+  cursor:pointer;font-size:11px;border:1px solid rgba(246,231,184,.26);
+  background:rgba(255,255,255,.05);color:#EBDCB6}
 .db:hover{border-color:var(--gold-300)}
 .db span:first-child{color:var(--gold-300)}
-.menu{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
-  max-height:44vh;overflow:auto;padding:6px;border-radius:10px;
-  background:rgba(5,20,14,.96);border:1px solid rgba(246,231,184,.28);backdrop-filter:blur(14px);
+.menu{display:none;position:absolute;left:0;right:0;bottom:calc(100% + 6px);z-index:20;
+  max-height:46vh;overflow:auto;padding:6px;border-radius:10px;
+  background:rgba(5,20,14,.97);border:1px solid rgba(246,231,184,.28);backdrop-filter:blur(14px);
   box-shadow:0 20px 50px -20px rgba(0,0,0,.95)}
-.drop.up .menu{top:auto;bottom:calc(100% + 8px);left:-6px;right:auto;width:200px}
 .drop.open .menu{display:block}
-.menu .gh{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-500);padding:7px 8px 3px}
-.mi{display:block;width:100%;text-align:left;padding:9px 10px;border:none;border-radius:6px;cursor:pointer;
-  background:none;color:#DCEAE1;font-size:12.5px;line-height:1.3}
+.menu .gh{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-500);padding:7px 8px 3px}
+.mi{display:block;width:100%;text-align:left;padding:8px 10px;border:none;border-radius:6px;cursor:pointer;
+  background:none;color:#DCEAE1;font-size:12px;line-height:1.3}
 .mi:hover{background:rgba(255,255,255,.08)}
 .mi[aria-current="true"]{color:var(--gold-100);background:rgba(224,200,120,.14)}
 .mi.empty{color:#7FA294;cursor:default}
-.mi.empty:hover{background:none}
 .mi-url{display:none;gap:6px;padding:6px}
 .mi-url.on{display:flex}
 .mi-url input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);
-  border-radius:6px;padding:7px 8px;color:#E7F2EB;font-size:12px}
-.mi-url button{border:none;border-radius:6px;padding:0 11px;cursor:pointer;
-  background:var(--gold-300);color:#241A06}
-.menu.slider{padding:10px 12px}
-.menu.slider label{display:block;font-size:11px;color:#B7D0C4;margin-bottom:6px}
-.menu.slider input{width:100%;accent-color:var(--jade)}
+  border-radius:6px;padding:6px 8px;color:#E7F2EB;font-size:11.5px}
+.mi-url button{border:none;border-radius:6px;padding:0 10px;cursor:pointer;background:var(--gold-300);color:#241A06}
 
-/* чат внутри пульта */
-.cs-chat{margin-top:10px;border-radius:8px;padding:8px 10px;cursor:pointer;
-  background:linear-gradient(178deg,rgba(244,235,212,.93),rgba(226,213,182,.93));color:var(--ink)}
-#chat{max-height:56px;overflow:hidden;transition:max-height .25s;
-  background-image:repeating-linear-gradient(180deg,transparent 0 25px,rgba(58,50,34,.14) 25px 26px)}
-.cs-chat.open #chat{max-height:150px;overflow-y:auto}
-.msg{font-family:var(--serif);font-size:15px;line-height:26px}
-.msg b{font-weight:600}
-#chatInput{display:none;width:100%;margin-top:6px;background:rgba(58,50,34,.08);
-  border:1px solid rgba(58,50,34,.26);border-radius:6px;padding:6px 8px;color:var(--ink);font-size:13px}
-.cs-chat.open #chatInput{display:block}
-#duck{margin-left:auto;font-size:10.5px;color:#241A06;background:var(--gold-300);
-  border-radius:99px;padding:4px 9px;opacity:0;transition:.2s;white-space:nowrap}
+/* три кнопки звука в одну строку, одного размера */
+.row.tools{gap:6px;justify-content:space-between}
+.micsw{flex:1;height:34px;padding:3px;border:none;border-radius:99px;cursor:pointer;
+  background:none;display:flex;align-items:center}
+.mtrack{width:100%;height:28px;border-radius:99px;position:relative;
+  background:linear-gradient(90deg,rgba(60,200,150,.30) 0 50%,rgba(230,90,70,.30) 50% 100%);
+  border:1px solid rgba(255,255,255,.18)}
+.mknob{position:absolute;top:2px;left:2px;width:24px;height:24px;border-radius:50%;
+  display:grid;place-items:center;transition:left .18s,background .18s,color .18s;
+  background:#2FBF8E;color:#04241A;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.mknob svg{width:14px;height:14px}
+.micsw[aria-checked="false"] .mknob{left:calc(100% - 26px);background:#D9503F;color:#2A0906}
+.vb{flex:1;height:34px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:99px;
+  cursor:pointer;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);
+  color:#DCEAE1;font-size:12px}
+.vb:hover{border-color:var(--gold-300)}
+.vb svg{width:15px;height:15px;color:var(--gold-300)}
+.vb em{font-style:normal;color:#9CBBAD;min-width:20px;text-align:left}
+.slide{display:none;margin-top:7px}
+.slide.on{display:block}
+.slide input{width:100%;accent-color:var(--jade)}
+
+/* чат пузырями, под кнопками звука */
+.chat{margin-top:10px;border-radius:10px;padding:8px;background:rgba(0,0,0,.24);
+  border:1px solid rgba(255,255,255,.08);cursor:pointer}
+.msgs{display:grid;gap:5px;max-height:72px;overflow:hidden;transition:max-height .25s}
+.chat.open .msgs{max-height:170px;overflow-y:auto}
+.bub{max-width:80%;padding:6px 10px;border-radius:14px;font-size:11.5px;line-height:1.35}
+.bub.them{justify-self:start;border-bottom-left-radius:4px;background:rgba(255,255,255,.13);color:#EAF4EE}
+.bub.me{justify-self:end;border-bottom-right-radius:4px;background:linear-gradient(140deg,#27795E,#1B5A45);color:#EAF7F1}
+.bub.sys{justify-self:center;background:none;color:#8FB5A5;font-size:10.5px}
+.send{display:flex;gap:6px;margin-top:7px}
+.send input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);
+  border-radius:99px;padding:6px 12px;color:#E7F2EB;font-size:11.5px}
+.send button{flex:none;width:30px;height:30px;border-radius:50%;border:none;cursor:pointer;
+  background:linear-gradient(140deg,var(--gold-300),var(--gold-500));color:#241A06;display:grid;place-items:center}
+.send button svg{width:13px;height:13px}
+#duck{position:absolute;top:-11px;right:10px;font-size:10px;color:#241A06;background:var(--gold-300);
+  border-radius:99px;padding:3px 9px;opacity:0;transition:.2s;white-space:nowrap}
 #duck.on{opacity:1}
 
-/* диагностика — по кнопке i */
-.diag-sheet{display:none;position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:8;
-  width:min(380px,calc(100vw - 24px));padding:14px;border-radius:12px;
-  background:rgba(4,18,12,.94);border:1px solid rgba(246,231,184,.24);backdrop-filter:blur(14px)}
+.diag-sheet{display:none;position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:8;
+  width:min(360px,calc(100vw - 24px));padding:13px;border-radius:12px;
+  background:rgba(4,18,12,.95);border:1px solid rgba(246,231,184,.24);backdrop-filter:blur(14px)}
 .diag-sheet.on{display:block}
-#diag{font-size:11.5px;color:#8FB5A5;display:grid;gap:4px}
+#diag{font-size:11px;color:#8FB5A5;display:grid;gap:4px}
 #diag div{display:flex;justify-content:space-between;gap:10px}
 #diag b{color:#CFE3D8;font-weight:500;text-align:right}
-
-@media (max-width:430px){
-  .room-bar{gap:4px;padding:5px 6px}
-  .ib{height:30px;padding:0 8px;font-size:11.5px}
-  .ib-tx{display:none}
-  .rb-room{font-size:11.5px;padding:0 4px}
-}
-
-/* ================= ГЛАВНАЯ ================= */
-.hero{position:relative;min-height:min(88vh,780px);display:grid;place-items:center;
-  overflow:hidden;text-align:center;padding:70px 18px 50px;
-  border-bottom:1px solid rgba(246,231,184,.18)}
-.hero-marble{position:absolute;inset:-8%;width:116%;height:116%;object-fit:cover;
-  filter:saturate(1.05);animation:drift 46s ease-in-out infinite alternate}
-@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1.04)}to{transform:translate3d(2%,1%,0) scale(1.12)}}
-.hero-veil{position:absolute;inset:0;
-  background:radial-gradient(70% 55% at 50% 42%,rgba(2,14,9,.42),rgba(2,12,8,.86) 78%),
-    linear-gradient(180deg,rgba(2,12,8,.6),transparent 30%,rgba(2,12,8,.92))}
-.hero-inner{position:relative;z-index:2;max-width:620px}
-.hero-logo{position:relative;display:grid;place-items:center;margin-bottom:18px;
-  transition:transform .4s cubic-bezier(.2,.8,.2,1)}
-.hero-logo .pyr{--s:min(190px,42vw)}
-.halo{position:absolute;width:140%;aspect-ratio:1;border-radius:50%;pointer-events:none;
-  background:radial-gradient(closest-side,rgba(246,231,184,.22),transparent 70%);
-  animation:pulse 7s ease-in-out infinite}
-@keyframes pulse{0%,100%{transform:scale(.9);opacity:.55}50%{transform:scale(1.1);opacity:1}}
-.hero-title{font-size:clamp(44px,11vw,86px);letter-spacing:.09em;line-height:1;
-  background:linear-gradient(180deg,#FFF8E2,#E3C878 55%,#A8801F);
-  -webkit-background-clip:text;background-clip:text;color:transparent}
-.hero-tag{font-family:var(--serif);font-size:clamp(19px,4vw,26px);color:#CFE3D8;margin-top:10px}
-.hero-lead{color:#9CBBAD;font-size:15px;line-height:1.65;margin:16px auto 26px;max-width:460px}
-.cta{border:none;cursor:pointer;padding:14px 30px;border-radius:99px;font-weight:600;font-size:15px;
-  color:#241A06;background:linear-gradient(140deg,#FFF3CF,var(--gold-300) 45%,var(--gold-500));
-  box-shadow:0 14px 40px -14px rgba(224,200,120,.75);transition:transform .18s,box-shadow .18s}
-.cta:hover{transform:translateY(-2px);box-shadow:0 20px 48px -14px rgba(224,200,120,.9)}
-.cta.wide{width:min(360px,100%)}
-.scroll-cue{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:2;
-  font-size:24px;color:rgba(246,231,184,.5);animation:bob 2.6s ease-in-out infinite}
-@keyframes bob{0%,100%{transform:translate(-50%,0)}50%{transform:translate(-50%,7px)}}
-
-.wrap-in{max-width:620px;margin:0 auto;padding:34px 18px 60px;display:grid;gap:34px}
-.reveal{opacity:0;transform:translateY(26px);transition:opacity .7s,transform .7s}
-.reveal.seen{opacity:1;transform:none}
-.reveal.center{text-align:center}
-.slab{position:relative;padding:22px;border-radius:10px;overflow:hidden;
-  background:linear-gradient(155deg,rgba(12,58,40,.55),rgba(4,22,15,.72));
-  border:1px solid rgba(246,231,184,.2)}
-.slab::after{content:'';position:absolute;inset:0;pointer-events:none;
-  background:radial-gradient(120% 80% at 18% 0%,rgba(246,231,184,.12),transparent 60%)}
-.slab-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
-.slab-date{font-family:var(--serif);font-size:clamp(22px,5vw,30px)}
-.slab-clock{font-family:var(--serif);font-size:clamp(22px,5vw,30px);color:var(--gold-300)}
-.slab-meta{font-size:13.5px;color:#8FB5A5;margin-top:4px}
-.slab-label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-500)}
-.vein-rule{height:1px;border:0;margin:16px 0;
-  background:linear-gradient(90deg,transparent,var(--gold-500),transparent);opacity:.55}
-.hol{display:grid;gap:9px;font-size:14.5px;margin-top:10px}
-.hol div{display:flex;gap:10px;align-items:baseline}
-.hol .dot{color:var(--gold-500);font-size:10px}
-.quote{border-left:2px solid var(--gold-500);padding:4px 0 4px 18px;margin-bottom:18px}
-.quote q{font-family:var(--serif);font-style:italic;font-size:clamp(19px,3.6vw,24px);line-height:1.4;quotes:'«' '»'}
-.quote cite{display:block;margin-top:8px;font-style:normal;font-size:12.5px;color:#8FB5A5}
-.perks{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.perk{font-size:13.5px;color:#9CBBAD;line-height:1.5;padding:14px;border-radius:8px;
-  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08)}
-.perk .ic{display:block;color:var(--gold-300);font-size:15px;margin-bottom:7px}
-@media (max-width:520px){.perks{grid-template-columns:1fr}}
-
-/* порталы комнат */
-.portals{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.portal{min-height:230px;border-radius:130px 130px 8px 8px;transition:transform .22s,border-color .22s}
-.portal:hover{transform:translateY(-4px)}
-@media (max-width:640px){.portals{grid-template-columns:1fr}.portal{min-height:180px;border-radius:100px 100px 8px 8px}}
-
-/* верхняя полоса комнаты: слова, а не ребусы */
-.room-bar{flex-wrap:wrap;justify-content:center;border-radius:18px;padding:7px 9px;gap:7px}
-.ib{gap:7px;height:34px;padding:0 12px;font-size:12.5px}
-.ib .ib-ic{display:inline-flex;width:17px;height:17px}
-.ib .ib-ic svg{width:17px;height:17px}
-.ib.only-ic{padding:0;width:34px;justify-content:center}
-.ib.only-ic svg{width:16px;height:16px}
-.ib[hidden]{display:none}
-
-/* чат: три строки, ввод всегда виден, по кнопке разворачивается */
-#chat{max-height:78px}
-.cs-chat.open #chat{max-height:210px}
-.chat-foot{display:flex;gap:6px;align-items:center;margin-top:6px}
-#chatInput{display:block;flex:1;margin-top:0}
-.chat-more{flex:none;width:30px;height:30px;border-radius:8px;cursor:pointer;
-  border:1px solid rgba(58,50,34,.26);background:rgba(58,50,34,.06);color:var(--ink);
-  font-size:15px;line-height:1;transition:transform .2s}
-.cs-chat.open .chat-more{transform:rotate(180deg)}
 </style>
 </head>
 <body>
@@ -482,35 +411,34 @@ body.in-room .card{background:none;border:none;padding:0;margin:0}
 
   <!-- КОМНАТА -->
   <div class="view" id="viewRoom">
-    <div class="room-bar">
+    <div class="room-bar" id="roomBar">
       <span class="rb-room"><span class="dot" id="rbDot"></span><span id="rbRole"></span></span>
-      <button class="ib" id="hpSwitch" role="switch" aria-checked="false">
-        <span class="ib-ic" id="hpIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg></span><span id="hpNow"></span>
-      </button>
-      <button class="ib" id="invite"><span class="ib-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M18 8v6M15 11h6"/></svg></span><span id="invLbl"></span></button>
-      <button class="ib" id="transfer" hidden><span class="ib-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg></span><span id="trfLbl"></span></button>
-      <button class="ib" id="toRooms" hidden><span class="ib-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 20H3z"/><path d="M12 3v17" opacity=".5"/></svg></span><span id="rmLbl"></span></button>
-      <button class="ib only-ic" id="diagBtn" title="i"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6v.2"/></svg></button>
+      <div class="seg" id="hpSeg">
+        <button id="hpSpk" class="on" data-mode="speaker" title=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9.5a3.5 3.5 0 0 1 0 5"/></svg></button>
+        <button id="hpHp" data-mode="headphones" title=""><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2.5" y="13" width="4" height="7" rx="2" fill="currentColor" stroke="none"/><rect x="17.5" y="13" width="4" height="7" rx="2" fill="currentColor" stroke="none"/></svg></button>
+      </div>
+      <button class="ib" id="invite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M18 8v6M15 11h6"/></svg><span id="invLbl"></span></button>
+      <button class="ib" id="transfer" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg><span id="trfLbl"></span></button>
+      <button class="ib only" id="toRooms" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 20H3z"/></svg></button>
+      <button class="ib only" id="diagBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.2"/></svg></button>
+      <button class="ib exit" id="exitBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4v16h-4"/><path d="M11 8l-4 4 4 4M7 12h9"/></svg><span id="exitLbl"></span></button>
     </div>
-    <p class="rb-hint" id="hpHint"></p>
 
     <div class="console" id="console">
-      <div class="cs-now"><b id="title"></b><span id="state">—</span></div>
+      <div class="cs-title" id="title"></div>
+      <div class="cs-state" id="state">—</div>
       <input type="range" id="seek" min="0" max="100" value="0">
       <div class="cs-time"><span id="cur">0:00</span><span id="rem">0:00</span></div>
 
-      <div class="cs-row">
-        <button class="cb" id="back15" title="">−15</button>
-        <button class="cb big" id="play" title="">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
-        <button class="cb big" id="pause" title="">
-          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
-        <button class="cb" id="stop" title="">
-          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
-        <button class="cb" id="fwd15" title="">+15</button>
+      <div class="row master-only" id="rowTransport">
+        <button class="cb" id="back15">−15</button>
+        <button class="cb big" id="play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+        <button class="cb big" id="pause"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+        <button class="cb" id="stop"><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+        <button class="cb" id="fwd15">+15</button>
       </div>
 
-      <div class="cs-row two">
+      <div class="row master-only" id="rowLib">
         <div class="drop" id="dropLib">
           <button class="db" id="libBtn" data-drop="dropLib"><span>◍</span><span id="libLbl"></span></button>
           <div class="menu" id="libMenu"></div>
@@ -520,50 +448,35 @@ body.in-room .card{background:none;border:none;padding:0;margin:0}
           <div class="menu" id="addMenu">
             <button class="mi" id="miFile"></button>
             <button class="mi" id="miUrl"></button>
-            <div class="mi-url" id="urlBox">
-              <input id="urlInput" placeholder="https://…">
-              <button id="urlGo">→</button>
-            </div>
+            <div class="mi-url" id="urlBox"><input id="urlInput" placeholder="https://…"><button id="urlGo">→</button></div>
           </div>
         </div>
       </div>
-
       <input type="file" id="upload" style="display:none"
         accept="audio/*,.mp3,.m4a,.m4b,.aac,.wav,.aif,.aiff,.caf,.flac,.ogg,.oga,.opus,.mp4,.wma,.alac">
 
-      <div class="cs-chat" id="chatBox">
-        <div id="chat"></div>
-        <div class="chat-foot">
-          <input id="chatInput">
-          <button class="chat-more" id="chatMore" title="">⌄</button>
-        </div>
+      <div class="row tools">
+        <button class="micsw" id="micBtn" role="switch" aria-checked="true" title="">
+          <span class="mtrack"><span class="mknob"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg></span></span>
+        </button>
+        <button class="vb" id="musicBtn" title=""><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18.5a2.5 2.5 0 1 1-2-2.45V6l10-2v9.5a2.5 2.5 0 1 1-2-2.45V6.6l-6 1.2v10.7z"/></svg><em id="musicVal">60</em></button>
+        <button class="vb" id="voiceBtn" title=""><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><em id="voiceVal">85</em></button>
       </div>
+      <div class="slide" id="musicSlide"><input type="range" id="music" min="0" max="100" value="60"></div>
+      <div class="slide" id="voiceSlide"><input type="range" id="voice" min="0" max="100" value="85"></div>
 
-      <div class="cs-row vols">
-        <button class="ib" id="micBtn" aria-pressed="true" title="">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="17" height="17">
-            <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor" stroke="none"/>
-            <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg></button>
-        <div class="drop up" id="dropMusic">
-          <button class="ib" id="musicBtn" data-drop="dropMusic" title=""><span class="ib-ic">♪</span></button>
-          <div class="menu slider" id="musicMenu">
-            <label id="lblMusic"></label>
-            <input type="range" id="music" min="0" max="100" value="60">
-          </div>
+      <div class="chat" id="chatBox">
+        <div class="msgs" id="chat"></div>
+        <div class="send">
+          <input id="chatInput">
+          <button id="chatSend"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg></button>
         </div>
-        <div class="drop up" id="dropVoice">
-          <button class="ib" id="voiceBtn" data-drop="dropVoice" title=""><span class="ib-ic">◉</span></button>
-          <div class="menu slider" id="voiceMenu">
-            <label id="lblVoice"></label>
-            <input type="range" id="voice" min="0" max="100" value="85">
-          </div>
-        </div>
-        <span id="duck"></span>
       </div>
+      <span id="duck"></span>
     </div>
 
     <div class="diag-sheet" id="diagSheet">
-      <h3 style="font-size:19px;margin-bottom:8px" id="diagTitle"></h3>
+      <h3 style="font-size:18px;margin-bottom:8px" id="diagTitle"></h3>
       <div id="diag"></div>
       <p class="hint" id="diagHint"></p>
     </div>
@@ -582,6 +495,9 @@ body.in-room .card{background:none;border:none;padding:0;margin:0}
 
 <template id="icSpk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9a4 4 0 0 1 0 6"/></svg></template>
 <template id="icHp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2.5" y="13" width="4.5" height="7" rx="2" fill="currentColor" stroke="none"/><rect x="17" y="13" width="4.5" height="7" rx="2" fill="currentColor" stroke="none"/></svg></template>
+
+<template id="icMic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg></template>
+<template id="icMicOff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" stroke="none"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/><path d="M3.5 3.5l17 17" stroke-width="2.3"/></svg></template>
 
 <audio id="remoteAudio" autoplay playsinline></audio>
 <div id="toast"></div>

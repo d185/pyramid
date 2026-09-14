@@ -11,6 +11,8 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'mic.live': 'Microphone is on',
+    'mic.muted': 'Microphone is off',
     'btn.exit': 'Leave',
     'lib.btn': 'Library',
     'lib.meditations': 'Meditations · edinstvo.net',
@@ -154,6 +156,8 @@ window.I18N = {
   },
 
   ru: {
+    'mic.live': 'Микрофон включён',
+    'mic.muted': 'Микрофон выключен',
     'btn.exit': 'Выйти',
     'lib.btn': 'Фонотека',
     'lib.meditations': 'Медитации · edinstvo.net',
@@ -297,6 +301,8 @@ window.I18N = {
   },
 
   es: {
+    'mic.live': 'Micrófono encendido',
+    'mic.muted': 'Micrófono apagado',
     'btn.exit': 'Salir',
     'lib.btn': 'Biblioteca',
     'lib.meditations': 'Meditaciones · edinstvo.net',
@@ -440,6 +446,8 @@ window.I18N = {
   },
 
   fr: {
+    'mic.live': 'Micro ouvert',
+    'mic.muted': 'Micro coupé',
     'btn.exit': 'Sortir',
     'lib.btn': 'Bibliothèque',
     'lib.meditations': 'Méditations · edinstvo.net',
@@ -583,6 +591,8 @@ window.I18N = {
   },
 
   de: {
+    'mic.live': 'Mikrofon an',
+    'mic.muted': 'Mikrofon aus',
     'btn.exit': 'Verlassen',
     'lib.btn': 'Bibliothek',
     'lib.meditations': 'Meditationen · edinstvo.net',

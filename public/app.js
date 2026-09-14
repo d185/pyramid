@@ -29,7 +29,7 @@ const ui = {
   music: $('#music'), voice: $('#voice'), duck: $('#duck'), diag: $('#diag'), invite: $('#invite'),
   transfer: $('#transfer'), upload: $('#upload'), lang: $('#lang'),
   hpSpk: $('#hpSpk'), hpHp: $('#hpHp'),
-  toRooms: $('#toRooms'), goRooms: $('#goRooms'), backHome: $('#backHome'),
+  toRooms: $('#toRooms'), goRooms: $('#goRooms'),
   mic: $('#micBtn'), chatBox: $('#chatBox'), rbRole: $('#rbRole'), rbDot: $('#rbDot'),
   libMenu: $('#libMenu'), libLbl: $('#libLbl'), addLbl: $('#addLbl'),
   exit: $('#exitBtn'), micKnob: $('#micBtn')
@@ -89,10 +89,9 @@ function applyLang() {
   $('#homeTag').textContent = t('home.tagline');
   $('#homeLead').textContent = t('home.lead');
   $('#goRooms').textContent = t('home.enter');
-  $('#goRooms2').textContent = t('home.enter');
   $('#roomsTitle').textContent = t('home.rooms');
+  $('#goRooms').textContent = t('home.enter');
   $('#roomsHint').textContent = t('home.roomshint');
-  $('#backHome').textContent = t('home.back');
   $('#tHolTitle').textContent = t('home.holidays');
   $('#tQuotesTitle').textContent = t('home.quotes');
   [['Pyr', 'green'], ['Gld', 'gold'], ['Slv', 'silver']].forEach(function (p) {
@@ -691,6 +690,7 @@ ui.mic.onclick = () => {
   if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
   ui.mic.setAttribute('aria-checked', micOn ? 'true' : 'false');
   ui.mic.querySelector('.mknob').innerHTML = $(micOn ? '#icMic' : '#icMicOff').innerHTML;
+  ui.mic.title = micOn ? t('mic.live') : t('mic.muted');
   if (!micOn && selfSpeaking) setSelfSpeaking(false);
   toast(micOn ? t('toast.micon') : t('toast.micoff'));
 };
@@ -701,8 +701,12 @@ function toggleSlide(which) {
   other.classList.remove('on');
   a.classList.toggle('on');
 }
-$('#musicBtn').onclick = () => toggleSlide('music');
-$('#voiceBtn').onclick = () => toggleSlide('voice');
+$('#musicBtn').onclick = e => { e.stopPropagation(); toggleSlide('music'); };
+$('#voiceBtn').onclick = e => { e.stopPropagation(); toggleSlide('voice'); };
+document.addEventListener('click', e => {
+  if (e.target.closest('.pop') || e.target.closest('.vb')) return;
+  document.querySelectorAll('.pop').forEach(p => p.classList.remove('on'));
+});
 
 function renderMode() {
   ui.hpSpk.classList.toggle('on', !headphones);
@@ -770,11 +774,6 @@ $('#inviteBack').onclick = e => { if (e.target === $('#inviteBack')) $('#inviteB
   $(id).addEventListener('click', () => setTimeout(() => $('#inviteBack').classList.remove('on'), 300));
 });
 
-ui.chatBox.onclick = e => {
-  if (e.target.closest('.send')) return;
-  ui.chatBox.classList.toggle('open');
-  ui.chat.scrollTop = ui.chat.scrollHeight;
-};
 $('#chatSend').onclick = e => {
   e.stopPropagation();
   if (!ui.chatInput.value.trim()) return;
@@ -890,7 +889,7 @@ function watchReveal() {
 
 /* ---------------- экраны ---------------- */
 function showView(name) {
-  ['Home', 'Rooms', 'Room'].forEach(function (v) {
+  ['Home', 'Room'].forEach(function (v) {
     $('#view' + v).classList.toggle('on', v.toLowerCase() === name);
   });
   const inRoom = name === 'room';
@@ -926,6 +925,8 @@ setInterval(() => {
 
 async function enterRoom(style) {
   roomStyle = style || roomStyle;
+  if (!roomId) roomId = Math.random().toString(36).slice(2, 8);
+  history.replaceState(null, '', '/?room=' + roomId);
   showView('room');
   if (window.Scene.supported()) window.Scene.enter(roomStyle, $('#gl'));
   attachAnalyser();
@@ -936,17 +937,17 @@ async function enterRoom(style) {
   }
 }
 
-ui.goRooms.onclick = () => showView('rooms');
-$('#goRooms2').onclick = () => showView('rooms');
-$('#backHome').onclick = () => showView('home');
-ui.toRooms.onclick = () => { if (isMaster) showView('rooms'); };
+/* Из комнаты «другая комната» ведёт на главную, к тем же трём пирамидам */
+ui.toRooms.onclick = () => { if (isMaster) ui.exit.onclick(); };
+
 document.querySelectorAll('[data-style]').forEach(b => {
   b.onclick = async () => {
-    const style = b.dataset.style;
-    if (!actx) { await unlock(); }
-    enterRoom(style);
+    pendingStyle = b.dataset.style;
+    if (localStorage.getItem('pyr-name')) { await unlock(); enterRoom(pendingStyle); }
+    else { $('#gate').classList.remove('gone'); $('#name').focus(); }
   };
 });
+let pendingStyle = 'green';
 
 /* ---------------- вход ---------------- */
 async function unlock() {
@@ -966,15 +967,13 @@ async function unlock() {
 $('#enter').onclick = async () => {
   $('#gate').classList.add('gone');
   await unlock();
-  // пришли по ссылке-приглашению — сразу в комнату, минуя витрину
-  if (invitedDirectly) { connect(); enterRoom(roomStyle); }
-  else { showView('home'); loadWeather(); }
+  if (!roomId) roomId = Math.random().toString(36).slice(2, 8);
+  enterRoom(invitedDirectly ? roomStyle : pendingStyle);
 };
 
 const askedRoom = new URL(location).searchParams.get('room');
 const invitedDirectly = !!askedRoom;
-roomId = askedRoom || Math.random().toString(36).slice(2, 8);
-history.replaceState(null, '', '/?room=' + roomId);
+roomId = askedRoom || null;
 
 window.LANGS.forEach(l => {
   const o = document.createElement('option');
@@ -986,5 +985,6 @@ $('#name').value = localStorage.getItem('pyr-name') || '';
 applyLang();
 paintMarbleArt();
 watchReveal();
-if (!invitedDirectly) loadWeather();
+loadWeather();
+if (!invitedDirectly) $('#gate').classList.add('gone');
 setInterval(renderToday, 60000);

@@ -112,7 +112,7 @@ window.Scene = (function () {
       uSeed: { value: P.seed || 0 },
       uScale: { value: 3.2 }, uWarp: { value: 4.0 },
       uFreq: { value: 8.0 }, uBend: { value: 8.0 }, uBend2: { value: 5.0 },
-      uSharp: { value: 2.8 }, uCut: { value: 0.28 }, uAmount: { value: 1.7 },
+      uSharp: { value: 3.1 }, uCut: { value: 0.30 }, uAmount: { value: 2.1 },
       uDens0: { value: 0.24 }, uDens1: { value: 0.66 },
       uGrain: { value: 60.0 }, uBandY: { value: 0.35 }
     };
@@ -276,8 +276,7 @@ window.Scene = (function () {
     pyr.rotation.y = Math.PI / 4; pyr.position.y = 6; scene.add(pyr);
     mats.wallRT = wallRT;
 
-    var floorRT = bake(P, 768);
-    floorRT.texture.repeat.set(2, 2);
+    var floorRT = bake(P, 1024);
     mats.floor = stone(floorRT.texture, P.veinColor, { metalness: .6, roughness: .3 });
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
@@ -305,8 +304,8 @@ window.Scene = (function () {
     var L = level;
 
     /* под музыку меняется только свечение прожилок */
-    if (mats.wall) mats.wall.userData.glow.value = 0.18 + L * 3.4;
-    if (mats.floor) mats.floor.userData.glow.value = 0.06 + L * 1.0;
+    if (mats.wall) mats.wall.userData.glow.value = 0.55 + L * 3.6;
+    if (mats.floor) mats.floor.userData.glow.value = 0.22 + L * 1.2;
     if (mats.shaft) mats.shaft.opacity = .06 + L * .3;
     if (disc && playing) disc.rotation.y += dt * 1.9;
 
@@ -397,7 +396,7 @@ window.Scene = (function () {
 
       scene = new THREE.Scene();
       scene.background = new THREE.Color(P.bg);
-      scene.fog = new THREE.FogExp2(P.fog, .038);
+      scene.fog = new THREE.FogExp2(P.fog, .026);
       camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, .1, 200);
       scene.add(new THREE.AmbientLight(P.ambient, P.amb));
 

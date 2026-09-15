@@ -47,6 +47,22 @@ window.Scene = (function () {
       key: 0xDCEAF2, accent: 0xBFD8E2, rim: 0x6E8A99, warm: 0xA8BCC6,
       veinColor: 0xCFE2EA, shaft: 'rgba(224,240,248,', env: ['#EAF4FA', '#5E727C', '#0A0C0D'],
       dustColor: 0xFFFFFF
+    },
+    blue: {
+      ramp: ['#02040A', '#050A16', '#0A152C', '#102146', '#183468', '#254B8C', '#3F6EAC'],
+      vein: '#DCE9F7', veinHot: '#FFFFFF', seed: 41.2,
+      fog: 0x070C18, bg: 0x03060E, ambient: 0x4E6FA8, amb: .48,
+      key: 0xE6F0FF, accent: 0x9FC2F0, rim: 0x3E63A8, warm: 0x86A8DC,
+      veinColor: 0xE2ECFA, shaft: 'rgba(226,238,255,', env: ['#EAF2FF', '#3E63A8', '#04070F'],
+      dustColor: 0xFFFFFF
+    },
+    violet: {
+      ramp: ['#08030C', '#110618', '#1E0D2C', '#2E1543', '#412162', '#573385', '#7A54A6'],
+      vein: '#F0DCFA', veinHot: '#FFFFFF', seed: 57.9,
+      fog: 0x120820, bg: 0x0A040F, ambient: 0x7A55A8, amb: .48,
+      key: 0xF4E4FF, accent: 0xC9A2F0, rim: 0x6B3FA0, warm: 0xB98ADC,
+      veinColor: 0xEEDCFA, shaft: 'rgba(240,224,255,', env: ['#F6EBFF', '#6B3FA0', '#0A040F'],
+      dustColor: 0xFFFFFF
     }
   };
   MARBLE.pyramid = MARBLE.green;
@@ -398,9 +414,10 @@ window.Scene = (function () {
       scene.background = new THREE.Color(P.bg);
       scene.fog = new THREE.FogExp2(P.fog, .026);
       camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, .1, 200);
-      scene.add(new THREE.AmbientLight(P.ambient, P.amb));
+      lights.amb = new THREE.AmbientLight(P.ambient, P.amb);
+      scene.add(lights.amb);
 
-      mats = {}; lights = {}; dust = null; disc = null;
+      mats = {}; dust = null; disc = null;
       build(P);
 
       clock = new THREE.Clock();
@@ -413,6 +430,33 @@ window.Scene = (function () {
       loop();
       return true;
     },
+    /* Сменить камень, не разбирая комнату: музыка играет, гость на месте,
+       меняются только текстуры стен, свет и туман. */
+    restyle: function (which) {
+      if (!renderer || !MARBLE[which] || which === kind) return false;
+      var P = MARBLE[which];
+      kind = which;
+      var wallRT = bake(P, 1536), floorRT = bake(P, 1024);
+      if (mats.wallRT) mats.wallRT.dispose();
+      if (mats.floorRT) mats.floorRT.dispose();
+      mats.wallRT = wallRT; mats.floorRT = floorRT;
+      mats.wall.map = wallRT.texture;
+      mats.wall.emissive = new THREE.Color(P.veinColor);
+      mats.wall.needsUpdate = true;
+      mats.floor.map = floorRT.texture;
+      mats.floor.emissive = new THREE.Color(P.veinColor);
+      mats.floor.needsUpdate = true;
+      scene.background = new THREE.Color(P.bg);
+      scene.fog.color = new THREE.Color(P.fog);
+      lights.key.color = new THREE.Color(P.key);
+      lights.accent.color = new THREE.Color(P.accent);
+      if (dust) dust.material.color = new THREE.Color(P.dustColor);
+      if (lights.amb) lights.amb.color = new THREE.Color(P.ambient);
+      environment(P.env);
+      builds++;
+      return true;
+    },
+    list: function () { return Object.keys(MARBLE).filter(function (k) { return k !== 'pyramid'; }); },
     setLevel: function (v) { target = Math.max(0, Math.min(1, v || 0)); },
     setPlaying: function (b) { playing = !!b; },
     level: function () { return level; },

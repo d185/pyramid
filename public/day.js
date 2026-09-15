@@ -103,29 +103,57 @@ window.DAYS = {
       de: 'Haben Sie Geduld mit allem Ungelösten in Ihrem Herzen.' }
   ],
 
-  /* два праздника рядом по календарю, если сегодня пусто */
+  /* Лёгкие поводы на каждый день — по ним и видно, что страница живая.
+     Берутся по номеру дня в году, поэтому меняются каждые сутки. */
+  fun: [
+    { en: 'A good day to say thank you', ru: 'Хороший день сказать спасибо', es: 'Buen día para dar las gracias', fr: 'Un bon jour pour dire merci', de: 'Ein guter Tag, danke zu sagen' },
+    { en: 'Day of the first cup of tea', ru: 'День первой чашки чая', es: 'Día de la primera taza de té', fr: 'Jour de la première tasse de thé', de: 'Tag der ersten Tasse Tee' },
+    { en: 'Day of a long walk', ru: 'День долгой прогулки', es: 'Día de un paseo largo', fr: 'Jour d’une longue promenade', de: 'Tag des langen Spaziergangs' },
+    { en: 'Day of quiet music', ru: 'День тихой музыки', es: 'Día de la música serena', fr: 'Jour de la musique calme', de: 'Tag der leisen Musik' },
+    { en: 'Day to call someone first', ru: 'День позвонить первым', es: 'Día de llamar tú primero', fr: 'Jour d’appeler le premier', de: 'Tag, zuerst anzurufen' },
+    { en: 'Day of an unhurried breakfast', ru: 'День неторопливого завтрака', es: 'Día del desayuno sin prisa', fr: 'Jour du petit-déjeuner sans hâte', de: 'Tag des gemächlichen Frühstücks' },
+    { en: 'Day of an open window', ru: 'День открытого окна', es: 'Día de la ventana abierta', fr: 'Jour de la fenêtre ouverte', de: 'Tag des offenen Fensters' },
+    { en: 'Day to finish what was started', ru: 'День закончить начатое', es: 'Día de terminar lo empezado', fr: 'Jour de finir ce qu’on a commencé', de: 'Tag, Begonnenes zu beenden' },
+    { en: 'Day of a letter to a friend', ru: 'День письма другу', es: 'Día de una carta a un amigo', fr: 'Jour d’une lettre à un ami', de: 'Tag eines Briefs an einen Freund' },
+    { en: 'Day of five minutes of silence', ru: 'День пяти минут тишины', es: 'Día de cinco minutos de silencio', fr: 'Jour de cinq minutes de silence', de: 'Tag der fünf Minuten Stille' },
+    { en: 'Day of the old photograph', ru: 'День старой фотографии', es: 'Día de la foto antigua', fr: 'Jour de la vieille photo', de: 'Tag des alten Fotos' },
+    { en: 'Day to look at the sky', ru: 'День посмотреть на небо', es: 'Día de mirar al cielo', fr: 'Jour de regarder le ciel', de: 'Tag, zum Himmel zu schauen' },
+    { en: 'Day of the unread book', ru: 'День непрочитанной книги', es: 'Día del libro sin leer', fr: 'Jour du livre non lu', de: 'Tag des ungelesenen Buches' },
+    { en: 'Day of a slow evening', ru: 'День медленного вечера', es: 'Día de una tarde lenta', fr: 'Jour d’une soirée lente', de: 'Tag des langsamen Abends' },
+    { en: 'Day to forgive a small thing', ru: 'День простить мелочь', es: 'Día de perdonar una pequeñez', fr: 'Jour de pardonner une broutille', de: 'Tag, eine Kleinigkeit zu verzeihen' },
+    { en: 'Day of a walk without a phone', ru: 'День прогулки без телефона', es: 'Día de pasear sin móvil', fr: 'Jour d’une marche sans téléphone', de: 'Tag des Spaziergangs ohne Handy' },
+    { en: 'Day of an early morning', ru: 'День раннего утра', es: 'Día de la mañana temprana', fr: 'Jour du petit matin', de: 'Tag des frühen Morgens' },
+    { en: 'Day to learn one word', ru: 'День выучить одно слово', es: 'Día de aprender una palabra', fr: 'Jour d’apprendre un mot', de: 'Tag, ein Wort zu lernen' }
+  ],
+
+  dayNumber: function (d) {
+    return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
+      - Date.UTC(d.getFullYear(), 0, 0)) / 86400000);
+  },
+
+  /* Сегодняшний праздник, ближайший будущий и один лёгкий повод,
+     который меняется каждый день — иначе список висит неделями. */
   pick: function (date, lang) {
     var mm = String(date.getMonth() + 1).padStart(2, '0');
     var dd = String(date.getDate()).padStart(2, '0');
-    var today = this.holidays[mm + '-' + dd];
-    var out = [];
-    if (today) out.push(today[lang] || today.en);
-    var keys = Object.keys(this.holidays).sort();
     var here = mm + '-' + dd;
-    for (var i = 0; i < keys.length && out.length < 3; i++) {
-      var k = keys.find ? keys[i] : keys[i];
-      if (k === here) continue;
-      if (k > here) { var h = this.holidays[k]; out.push((h[lang] || h.en)); }
-    }
-    while (out.length < 3) {
-      var kk = keys[out.length % keys.length], hh = this.holidays[kk];
-      out.push(hh[lang] || hh.en);
-    }
-    return { today: !!today, list: out.slice(0, 3) };
+    var keys = Object.keys(this.holidays).sort();
+    var out = [], today = this.holidays[here];
+    var pickName = function (h) { return h[lang] || h.en; };
+
+    if (today) out.push({ when: 'today', text: pickName(today) });
+
+    var next = keys.find(function (k) { return k > here; }) || keys[0];
+    if (next && next !== here) out.push({ when: 'soon', text: pickName(this.holidays[next]), date: next });
+
+    var day = this.dayNumber(date);
+    var f = this.fun[day % this.fun.length];
+    out.push({ when: 'fun', text: f[lang] || f.en });
+    return out.slice(0, 3);
   },
 
   twoQuotes: function (date, lang) {
-    var day = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 86400000);
+    var day = this.dayNumber(date);
     var n = this.quotes.length;
     var a = this.quotes[(day * 2) % n], b = this.quotes[(day * 2 + 1) % n];
     return [

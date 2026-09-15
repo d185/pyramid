@@ -89,8 +89,10 @@ function applyLang() {
   $('#homeTag').textContent = t('home.tagline');
   $('#homeLead').textContent = t('home.lead');
   $('#goRooms').textContent = t('home.enter');
+  $('#enterTop').textContent = t('home.signin');
   $('#roomsTitle').textContent = t('home.rooms');
   $('#goRooms').textContent = t('home.enter');
+  $('#enterTop').textContent = t('home.signin');
   $('#roomsHint').textContent = t('home.roomshint');
   $('#tHolTitle').textContent = t('home.holidays');
   $('#tQuotesTitle').textContent = t('home.quotes');
@@ -99,7 +101,9 @@ function applyLang() {
     $('#rd' + p[0]).textContent = t('room.' + p[1] + '.d');
   });
   $('#perks').innerHTML = ['perk.sync', 'perk.voice', 'perk.link', 'perk.walls']
-    .map(function (k) { return '<div class="perk"><span class="ic">◆</span><span>' + t(k) + '</span></div>'; }).join('');
+    .map(function (k, i) { return '<div class="perk" data-n="' + (i + 1) + '">' + t(k) + '</div>'; }).join('');
+  $('#roomsH').textContent = t('home.roomsH');
+  $('#quotesH').textContent = t('home.quotesH');
   renderToday();
   renderMode();
   if (!currentTrack) ui.title.textContent = t('player.none');
@@ -110,9 +114,9 @@ function applyLang() {
 function renderToday() {
   var d = new Date();
   $('#tDate').textContent = d.toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' });
-  var h = window.DAYS.pick(d, lang);
-  $('#tHol').innerHTML = h.list.map(function (x) {
-    return '<div><span class="dot">◆</span><span>' + x + '</span></div>';
+  $('#tHol').innerHTML = window.DAYS.pick(d, lang).map(function (x) {
+    var tag = x.when === 'today' ? t('day.today') : x.when === 'soon' ? t('day.soon') : t('day.fun');
+    return '<div><span class="tag">' + tag + '</span><span>' + x.text + '</span></div>';
   }).join('');
   $('#tQuotes').innerHTML = window.DAYS.twoQuotes(d, lang).map(function (q) {
     return '<figure class="quote"><q>' + q.text + '</q><cite>' + q.who + '</cite></figure>';
@@ -494,7 +498,7 @@ function connect() {
         if (m.state.style && m.state.style !== roomStyle) {
           roomStyle = m.state.style;
           if (document.body.classList.contains('in-room') && window.Scene.supported())
-            window.Scene.enter(roomStyle, $('#gl'));
+            if (!window.Scene.restyle(roomStyle)) window.Scene.enter(roomStyle, $('#gl'));
         }
         renderTracks(); renderRole(m.peers);
         m.chat.forEach(addChat);
@@ -525,7 +529,8 @@ function connect() {
 
       case 'style':
         roomStyle = m.style;
-        if (window.Scene.supported()) window.Scene.enter(roomStyle, $('#gl'));
+        if (window.Scene.supported() && !window.Scene.restyle(roomStyle))
+          window.Scene.enter(roomStyle, $('#gl'));
         break;
 
       case 'signal': enqueueSignal(m); break;
@@ -938,16 +943,47 @@ async function enterRoom(style) {
 }
 
 /* Из комнаты «другая комната» ведёт на главную, к тем же трём пирамидам */
-ui.toRooms.onclick = () => { if (isMaster) ui.exit.onclick(); };
+/* Смена камня на лету: сцена не разбирается, музыка играет,
+   гость остаётся на месте — меняются только стены. */
+function renderStylePop() {
+  const grid = $('#spGrid');
+  if (!grid || !window.Scene.supported()) return;
+  grid.innerHTML = '';
+  window.Scene.list().forEach(k => {
+    const b = document.createElement('button');
+    b.className = 'sp-item';
+    b.dataset.pick = k;
+    if (k === roomStyle) b.setAttribute('aria-current', 'true');
+    const img = window.Scene.image(k, 96, 92);
+    b.innerHTML = '<span class="sp-tri"' + (img ? ' style="background-image:url(' + img.toDataURL() + ')"' : '') +
+      '></span><span>' + t('room.' + k) + '</span>';
+    b.onclick = () => {
+      $('#stylePop').classList.remove('on');
+      if (k === roomStyle) return;
+      roomStyle = k;
+      window.Scene.restyle(k);
+      if (isMaster && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'style', style: k }));
+      renderStylePop();
+    };
+    grid.appendChild(b);
+  });
+}
+ui.toRooms.onclick = () => {
+  if (!isMaster) return;
+  renderStylePop();
+  $('#spTitle').textContent = t('home.rooms');
+  $('#stylePop').classList.add('on');
+};
+$('#stylePop').onclick = e => { if (e.target === $('#stylePop')) $('#stylePop').classList.remove('on'); };
 
-document.querySelectorAll('[data-style]').forEach(b => {
-  b.onclick = async () => {
-    pendingStyle = b.dataset.style;
-    if (localStorage.getItem('pyr-name')) { await unlock(); enterRoom(pendingStyle); }
-    else { $('#gate').classList.remove('gone'); $('#name').focus(); }
-  };
-});
 let pendingStyle = 'green';
+async function startRoom(style) {
+  pendingStyle = style || 'green';
+  if (localStorage.getItem('pyr-name')) { await unlock(); enterRoom(pendingStyle); }
+  else { $('#gate').classList.remove('gone'); $('#name').focus(); }
+}
+document.querySelectorAll('[data-style]').forEach(b => { b.onclick = () => startRoom(b.dataset.style); });
+$('#enterTop').onclick = () => startRoom('green');
 
 /* ---------------- вход ---------------- */
 async function unlock() {
@@ -985,6 +1021,11 @@ $('#name').value = localStorage.getItem('pyr-name') || '';
 applyLang();
 paintMarbleArt();
 watchReveal();
+addEventListener('scroll', () => {
+  const top = document.querySelector('.top');
+  if (top) top.classList.toggle('solid', scrollY > 24);
+}, { passive: true });
 loadWeather();
 if (!invitedDirectly) $('#gate').classList.add('gone');
 setInterval(renderToday, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) renderToday(); });

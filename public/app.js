@@ -978,7 +978,7 @@ $('#stylePop').onclick = e => { if (e.target === $('#stylePop')) $('#stylePop').
 
 let pendingStyle = 'green';
 async function startRoom(style) {
-  pendingStyle = style || 'green';
+  pendingStyle = style || pendingStyle || 'green';
   if (localStorage.getItem('pyr-name')) { await unlock(); enterRoom(pendingStyle); }
   else { $('#gate').classList.remove('gone'); $('#name').focus(); }
 }
@@ -1004,12 +1004,15 @@ $('#enter').onclick = async () => {
   $('#gate').classList.add('gone');
   await unlock();
   if (!roomId) roomId = Math.random().toString(36).slice(2, 8);
-  enterRoom(invitedDirectly ? roomStyle : pendingStyle);
+  // выбор пирамиды всегда главнее: раньше застрявший в адресе номер комнаты
+  // заставлял открывать гамму по умолчанию
+  enterRoom(pendingStyle);
 };
 
 const askedRoom = new URL(location).searchParams.get('room');
 const invitedDirectly = !!askedRoom;
 roomId = askedRoom || null;
+if (invitedDirectly) pendingStyle = roomStyle;
 
 window.LANGS.forEach(l => {
   const o = document.createElement('option');

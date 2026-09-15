@@ -95,8 +95,6 @@ body.guest .item{opacity:.5}
   background-image:repeating-linear-gradient(180deg,transparent 0 27px,rgba(58,50,34,.16) 27px 28px)}
 .msg{font-family:var(--serif);font-size:17px;line-height:28px}
 .msg b{font-weight:600}
-#chatInput{width:100%;margin-top:8px;background:rgba(58,50,34,.08);border:1px solid rgba(58,50,34,.28);
-  border-radius:2px;padding:8px 10px;color:var(--ink)}
 
 .bottom{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 #mic{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;flex:none;display:grid;place-items:center;
@@ -404,7 +402,12 @@ body.guest .rb-role{display:none}
 .send button{width:32px;height:32px;flex:none}
 
 /* поля ввода 16 пунктов: иначе телефон сам приближает страницу и не возвращает */
-.mi-url input,#chatInput,.gate input{font-size:16px}
+/* поле чата: светлый текст на тёмном, крупнее — иначе телефон приближает страницу */
+#chatInput{font-size:16px;color:#F2FBF6;background:rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.22)}
+#chatInput::placeholder{color:rgba(226,240,233,.45)}
+#chatInput:focus{border-color:var(--gold-300);background:rgba(255,255,255,.14);outline:none}
+.mi-url input,.gate input{font-size:16px}
 
 /* ползунок громкости всплывает поверх кнопки */
 .pop{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);

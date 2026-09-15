@@ -49,19 +49,19 @@ window.Scene = (function () {
       dustColor: 0xFFFFFF
     },
     blue: {
-      ramp: ['#02040A', '#050A16', '#0A152C', '#102146', '#183468', '#254B8C', '#3F6EAC'],
+      ramp: ['#01030A', '#030816', '#06112E', '#0A1B4C', '#0E2A75', '#1540A8', '#2A5FD0'],
       vein: '#DCE9F7', veinHot: '#FFFFFF', seed: 41.2,
-      fog: 0x070C18, bg: 0x03060E, ambient: 0x4E6FA8, amb: .48,
-      key: 0xE6F0FF, accent: 0x9FC2F0, rim: 0x3E63A8, warm: 0x86A8DC,
+      fog: 0x040A1C, bg: 0x01030A, ambient: 0x2F55A8, amb: .46,
+      key: 0xE8F1FF, accent: 0x7FA8F0, rim: 0x1F44A0, warm: 0x5E86D0,
       veinColor: 0xE2ECFA, shaft: 'rgba(226,238,255,', env: ['#EAF2FF', '#3E63A8', '#04070F'],
       dustColor: 0xFFFFFF
     },
     violet: {
-      ramp: ['#08030C', '#110618', '#1E0D2C', '#2E1543', '#412162', '#573385', '#7A54A6'],
-      vein: '#F0DCFA', veinHot: '#FFFFFF', seed: 57.9,
-      fog: 0x120820, bg: 0x0A040F, ambient: 0x7A55A8, amb: .48,
-      key: 0xF4E4FF, accent: 0xC9A2F0, rim: 0x6B3FA0, warm: 0xB98ADC,
-      veinColor: 0xEEDCFA, shaft: 'rgba(240,224,255,', env: ['#F6EBFF', '#6B3FA0', '#0A040F'],
+      ramp: ['#1A1220', '#2A1E34', '#3E2E4E', '#57446B', '#75608B', '#9C8AB0', '#CBBCD8'],
+      vein: '#FBF3FF', veinHot: '#FFFFFF', seed: 57.9,
+      fog: 0x241A2E, bg: 0x140E1C, ambient: 0xB9A4CC, amb: .55,
+      key: 0xFBF2FF, accent: 0xDCC8EE, rim: 0x8E76A8, warm: 0xD4BEE4,
+      veinColor: 0xF6ECFF, shaft: 'rgba(250,244,255,', env: ['#FDF8FF', '#9C8AB0', '#140E1C'],
       dustColor: 0xFFFFFF
     }
   };
@@ -126,11 +126,11 @@ window.Scene = (function () {
       uVein: { value: hex(P.vein) },
       uVeinHot: { value: hex(P.veinHot) },
       uSeed: { value: P.seed || 0 },
-      uScale: { value: 3.2 }, uWarp: { value: 4.0 },
-      uFreq: { value: 8.0 }, uBend: { value: 8.0 }, uBend2: { value: 5.0 },
-      uSharp: { value: 3.1 }, uCut: { value: 0.30 }, uAmount: { value: 2.1 },
+      uScale: { value: 4.2 }, uWarp: { value: 4.0 },
+      uFreq: { value: 15.0 }, uBend: { value: 14.0 }, uBend2: { value: 8.0 },
+      uSharp: { value: 3.6 }, uCut: { value: 0.32 }, uAmount: { value: 2.3 },
       uDens0: { value: 0.24 }, uDens1: { value: 0.66 },
-      uGrain: { value: 60.0 }, uBandY: { value: 0.35 }
+      uGrain: { value: 24.0 }, uBandY: { value: 0.35 }
     };
   }
 
@@ -245,45 +245,6 @@ window.Scene = (function () {
     m.position.y = y; scene.add(m); mats.shaft = m.material;
   }
 
-  /* Стеклянный стол с вертушкой. Золотого обода по краю больше нет —
-     он читался как кольцо посреди комнаты. */
-  function table(P, tex) {
-    var glass = new THREE.MeshStandardMaterial({
-      color: 0xBFF3E0, transparent: true, opacity: .26,
-      metalness: .1, roughness: .06, envMapIntensity: 1.6
-    });
-    var top = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, .06, 64), glass);
-    top.position.y = 1.02; scene.add(top);
-    var stem = new THREE.Mesh(new THREE.CylinderGeometry(.16, .34, 1, 32), glass);
-    stem.position.y = .5; scene.add(stem);
-
-    var c = document.createElement('canvas'); c.width = c.height = 512;
-    var v = c.getContext('2d');
-    v.fillStyle = '#0B0E0D'; v.fillRect(0, 0, 512, 512);
-    for (var r = 40; r < 250; r += 2.2) {
-      v.beginPath(); v.arc(256, 256, r, 0, 6.283);
-      v.strokeStyle = r % 9 < 4 ? 'rgba(255,255,255,.07)' : 'rgba(0,0,0,.35)';
-      v.lineWidth = 1; v.stroke();
-    }
-    v.beginPath(); v.arc(256, 256, 84, 0, 6.283);
-    var g2 = v.createRadialGradient(220, 220, 4, 256, 256, 84);
-    g2.addColorStop(0, '#FFF3CF'); g2.addColorStop(.5, '#E3C878'); g2.addColorStop(1, '#8A6B18');
-    v.fillStyle = g2; v.fill();
-    v.beginPath(); v.arc(256, 256, 7, 0, 6.283); v.fillStyle = '#04170F'; v.fill();
-
-    disc = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .018, 64), [
-      new THREE.MeshStandardMaterial({ color: 0x0B2A20, metalness: .5, roughness: .5 }),
-      new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(c), metalness: .55, roughness: .28 }),
-      new THREE.MeshStandardMaterial({ color: 0x08201A, metalness: .5, roughness: .6 })
-    ]);
-    disc.position.y = 1.06; scene.add(disc);
-
-    var arm = new THREE.Mesh(new THREE.CylinderGeometry(.018, .018, 1, 10),
-      new THREE.MeshStandardMaterial({ color: P.veinColor, metalness: 1, roughness: .2 }));
-    arm.rotation.set(0, 0, Math.PI / 2); arm.rotation.y = -.55;
-    arm.position.set(.4, 1.15, .34); scene.add(arm);
-  }
-
   function build(P) {
     builds++;
     var wallRT = bake(P, 1536);
@@ -306,7 +267,6 @@ window.Scene = (function () {
     var warm = new THREE.PointLight(P.warm, 5, 18, 2); warm.position.set(6, 3.2, -4); scene.add(warm);
 
     shaft(2.6, 8.4, 4.4, P.shaft);
-    table(P, wallRT.texture);
     dust = particles(340, 8, 8, .055, P.dustColor, .75);
     environment(P.env);
     camera.position.set(0, 1.75, 4.6);

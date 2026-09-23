@@ -18,84 +18,42 @@ const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
 const TRACKS = path.join(ROOT, 'tracks');
 
-/* ---------- демо-треки: делаются в памяти при первом запросе ---------- */
-const DEMOS = [
-  { id: 'demo-1-tishina.wav', title: 'Demo 1', seconds: 60, voices: [
-    { f: 110, a: .34, lfo: .05, ph: 0 }, { f: 164.81, a: .22, lfo: .07, ph: 1 },
-    { f: 220, a: .16, lfo: .04, ph: 2 }, { f: 329.63, a: .09, lfo: .09, ph: 3 }] },
-  { id: 'demo-2-potok.wav', title: 'Demo 2', seconds: 60, voices: [
-    { f: 146.83, a: .30, lfo: .08, ph: 0 }, { f: 220, a: .20, lfo: .11, ph: 1.5 },
-    { f: 293.66, a: .14, lfo: .06, ph: .5 }, { f: 440, a: .07, lfo: .13, ph: 2.5 }] },
-  { id: 'demo-3-sad.wav', title: 'Demo 3', seconds: 60, voices: [
-    { f: 196, a: .28, lfo: .12, ph: 0 }, { f: 246.94, a: .19, lfo: .09, ph: 2 },
-    { f: 392, a: .12, lfo: .15, ph: 1 }, { f: 587.33, a: .06, lfo: .2, ph: 3 }] }
-];
-const demoCache = new Map();
-
-function renderWav(d) {
-  const rate = 22050, n = Math.floor(rate * d.seconds);
-  const buf = Buffer.alloc(44 + n * 2);
-  buf.write('RIFF', 0); buf.writeUInt32LE(36 + n * 2, 4); buf.write('WAVE', 8);
-  buf.write('fmt ', 12); buf.writeUInt32LE(16, 16); buf.writeUInt16LE(1, 20);
-  buf.writeUInt16LE(1, 22); buf.writeUInt32LE(rate, 24); buf.writeUInt32LE(rate * 2, 28);
-  buf.writeUInt16LE(2, 32); buf.writeUInt16LE(16, 34);
-  buf.write('data', 36); buf.writeUInt32LE(n * 2, 40);
-
-  const V = d.voices.length;
-  const step = d.voices.map(v => 2 * Math.PI * v.f / rate);
-  const phase = new Float64Array(V);
-  const amp = new Float64Array(V);
-  for (let i = 0; i < n; i++) {
-    const t = i / rate;
-    if ((i & 127) === 0) {           // медленное дыхание считаем редко, это не слышно
-      for (let v = 0; v < V; v++) {
-        const q = d.voices[v];
-        amp[v] = q.a * (0.6 + 0.4 * Math.sin(2 * Math.PI * q.lfo * t + q.ph));
-      }
-    }
-    let s = 0;
-    for (let v = 0; v < V; v++) { s += Math.sin(phase[v]) * amp[v]; phase[v] += step[v]; }
-    const env = Math.min(1, t / 2) * Math.min(1, (d.seconds - t) / 2);
-    const x = Math.max(-1, Math.min(1, s * env * 0.55));
-    buf.writeInt16LE((x * 32767) | 0, 44 + i * 2);
-  }
-  return buf;
-}
-
-function getDemo(id) {
-  if (demoCache.has(id)) return demoCache.get(id);
-  const d = DEMOS.find(x => x.id === id);
-  if (!d) return null;
-  const t = Date.now();
-  const buf = renderWav(d);
-  console.log('собран демо-трек', id, Date.now() - t, 'мс');
-  demoCache.set(id, buf);
-  return buf;
-}
-
-if (!fs.existsSync(TRACKS)) fs.mkdirSync(TRACKS, { recursive: true });
-
-const MEDITATIONS = path.join(TRACKS, 'meditations');
-if (!fs.existsSync(MEDITATIONS)) fs.mkdirSync(MEDITATIONS, { recursive: true });
+/* ---------- фонотека: каждая подпапка в tracks — своя группа ---------- */
+const TRACK_DIRS = [path.join(ROOT, 'tracks'), path.join(ROOT, 'track')];
+for (const d of TRACK_DIRS) if (!fs.existsSync(d)) { try { fs.mkdirSync(d, { recursive: true }); } catch (e) { } }
 
 function listTracks() {
-  const demos = DEMOS.map(d => ({ id: d.id, title: d.title, url: '/tracks/' + d.id, group: 'demo' }));
-  const demoIds = new Set(DEMOS.map(d => d.id));
-  const uploads = fs.readdirSync(TRACKS)
-    .filter(f => AUDIO_RE.test(f) && !demoIds.has(f))
-    .map(f => ({
-      id: f, title: f.replace(/^[a-z0-9]+-/, '').replace(/\.[^.]+$/, ''),
-      url: '/tracks/' + encodeURIComponent(f), group: 'upload'
-    }));
-  // всё, что положено в tracks/meditations, попадает в левое меню
-  const med = fs.readdirSync(MEDITATIONS)
-    .filter(f => AUDIO_RE.test(f))
-    .map(f => ({
-      id: 'meditations/' + f, title: f.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
-      url: '/tracks/meditations/' + encodeURIComponent(f), group: 'meditation'
-    }));
-  return med.concat(demos, uploads);
+  const out = [];
+  for (const base of TRACK_DIRS) {
+    if (!fs.existsSync(base)) continue;
+    const rel = path.basename(base);
+    let entries = [];
+    try { entries = fs.readdirSync(base, { withFileTypes: true }); } catch (e) { continue; }
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        let files = [];
+        try { files = fs.readdirSync(path.join(base, e.name)); } catch (err) { continue; }
+        files.filter(f => AUDIO_RE.test(f)).forEach(f => out.push({
+          id: rel + '/' + e.name + '/' + f,
+          title: f.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
+          url: '/tracks/' + encodeURIComponent(rel) + '/' + encodeURIComponent(e.name) + '/' + encodeURIComponent(f),
+          group: e.name
+        }));
+      } else if (AUDIO_RE.test(e.name)) {
+        out.push({
+          id: rel + '/' + e.name,
+          title: e.name.replace(/^[a-z0-9]{7,12}-/, '').replace(/\.[^.]+$/, ''),
+          url: '/tracks/' + encodeURIComponent(rel) + '/' + encodeURIComponent(e.name),
+          group: 'upload'
+        });
+      }
+    }
+  }
+  return out;
 }
+
+/* куда класть присланный файл */
+const UPLOAD_DIR = path.join(ROOT, 'tracks');
 
 /* ---------- статика ---------- */
 const MIME = {
@@ -158,7 +116,7 @@ const server = http.createServer((req, res) => {
     // iPhone иногда отдаёт файл без расширения — тогда считаем его mp4-аудио
     if (!ext || !AUDIO_RE.test('x' + ext)) ext = ext && MIME[ext] ? ext : '.m4a';
     const name = Date.now().toString(36) + '-' + base + ext;
-    const dest = path.join(TRACKS, name);
+    const dest = path.join(UPLOAD_DIR, name);
     const out = fs.createWriteStream(dest);
     let size = 0, tooBig = false;
     req.on('data', c => { size += c.length; if (size > 80e6) { tooBig = true; req.destroy(); } });
@@ -199,7 +157,7 @@ const server = http.createServer((req, res) => {
         ext = Object.keys(MIME).find(k => MIME[k] === ct) || '.mp3';
       }
       const name = Date.now().toString(36) + '-' + base + ext;
-      fs.writeFileSync(path.join(TRACKS, name), buf);
+      fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
       console.log('скачан по ссылке', name, Math.round(buf.length / 1e6) + ' МБ');
       broadcastAll({ type: 'tracks', tracks: listTracks() });
       res.writeHead(200, { 'Content-Type': MIME['.json'] });
@@ -208,18 +166,14 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (p.startsWith('/tracks/meditations/')) {
-    return serveFile(res, path.join(MEDITATIONS, path.basename(p)));
-  }
   if (p.startsWith('/tracks/')) {
-    const name = path.basename(p);
-    const demo = getDemo(name);
-    if (demo) {
-      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Content-Length': demo.length, 'Cache-Control': 'public, max-age=86400' });
-      return res.end(demo);
-    }
-    return serveFile(res, path.join(TRACKS, name));
+    const parts = p.slice(8).split('/').filter(Boolean).map(x => path.basename(x));
+    if (!parts.length) { res.writeHead(404); return res.end('нет файла'); }
+    const base = parts[0] === 'track' || parts[0] === 'tracks'
+      ? path.join(ROOT, parts.shift()) : path.join(ROOT, 'tracks');
+    return serveFile(res, path.join(base, ...parts));
   }
+
   const file = p === '/' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
   serveFile(res, file);
 });

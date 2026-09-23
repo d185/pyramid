@@ -223,9 +223,7 @@ body:not(.in-room) .top{position:fixed;top:0;left:0;right:0;z-index:30;margin:0;
   background:linear-gradient(90deg,transparent,var(--gold-500),transparent);opacity:.5}
 .hol{display:grid;gap:10px;font-size:14.5px;margin-top:12px}
 .hol div{display:flex;gap:11px;align-items:baseline}
-.hol .tag{flex:none;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--gold-500);border:1px solid rgba(192,152,47,.4);border-radius:99px;
-  padding:2px 8px;min-width:62px;text-align:center}
+.hol .dot{color:var(--gold-500);font-size:9px;flex:none}
 .quote{border-left:2px solid var(--gold-500);padding:5px 0 5px 20px;margin-bottom:22px}
 .quote q{font-family:var(--serif);font-style:italic;font-size:clamp(19px,3.8vw,25px);line-height:1.45;quotes:'«' '»'}
 .quote cite{display:block;margin-top:9px;font-style:normal;font-size:12.5px;color:#8FB5A5}
@@ -320,7 +318,8 @@ body.guest .master-only{display:none}
   background:rgba(5,20,14,.97);border:1px solid rgba(246,231,184,.28);backdrop-filter:blur(14px);
   box-shadow:0 20px 50px -20px rgba(0,0,0,.95)}
 .drop.open .menu{display:block}
-.menu .gh{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold-500);padding:7px 8px 3px}
+.menu .gh{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-300);padding:9px 8px 4px;font-weight:600}
+.menu .gh:not(:first-child){border-top:1px solid rgba(246,231,184,.16);margin-top:4px}
 .mi{display:block;width:100%;text-align:left;padding:8px 10px;border:none;border-radius:6px;cursor:pointer;
   background:none;color:#DCEAE1;font-size:12px;line-height:1.3}
 .mi:hover{background:rgba(255,255,255,.08)}
@@ -560,7 +559,7 @@ body:not(.in-room) .brand{font-size:22px;letter-spacing:.14em}
         <h1 class="hero-title">Pyramid</h1>
         <div class="hero-tag" id="homeTag"></div>
         <p class="hero-lead" id="homeLead"></p>
-        <a class="cta" href="#rooms" id="goRooms"></a>
+        <button class="cta" id="goRooms"></button>
       </div>
       <div class="scroll-cue" aria-hidden="true"><span></span></div>
     </section>
@@ -603,7 +602,7 @@ body:not(.in-room) .brand{font-size:22px;letter-spacing:.14em}
 
       <section class="reveal">
         <div class="eyebrow" id="tQuotesTitle"></div>
-        <h2 class="section-title" id="quotesH"></h2>
+        
         <div id="tQuotes"></div>
       </section>
 

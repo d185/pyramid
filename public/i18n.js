@@ -11,6 +11,7 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'lib.empty': 'No folders in tracks yet',
     'home.roomsH': 'Pick a stone, step inside',
     'home.quotesH': 'Two thoughts for today',
     'day.today': 'today',
@@ -166,6 +167,7 @@ window.I18N = {
   },
 
   ru: {
+    'lib.empty': 'В папке tracks пока пусто',
     'home.roomsH': 'Выберите камень и входите',
     'home.quotesH': 'Две мысли на сегодня',
     'day.today': 'сегодня',
@@ -321,6 +323,7 @@ window.I18N = {
   },
 
   es: {
+    'lib.empty': 'Aún no hay carpetas en tracks',
     'home.roomsH': 'Elige una piedra y entra',
     'home.quotesH': 'Dos ideas para hoy',
     'day.today': 'hoy',
@@ -476,6 +479,7 @@ window.I18N = {
   },
 
   fr: {
+    'lib.empty': 'Aucun dossier dans tracks',
     'home.roomsH': 'Choisissez une pierre et entrez',
     'home.quotesH': 'Deux pensées pour aujourd’hui',
     'day.today': 'aujourd’hui',
@@ -631,6 +635,7 @@ window.I18N = {
   },
 
   de: {
+    'lib.empty': 'Noch keine Ordner in tracks',
     'home.roomsH': 'Wählen Sie einen Stein und treten Sie ein',
     'home.quotesH': 'Zwei Gedanken für heute',
     'day.today': 'heute',

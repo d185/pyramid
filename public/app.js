@@ -103,7 +103,6 @@ function applyLang() {
   $('#perks').innerHTML = ['perk.sync', 'perk.voice', 'perk.link', 'perk.walls']
     .map(function (k, i) { return '<div class="perk" data-n="' + (i + 1) + '">' + t(k) + '</div>'; }).join('');
   $('#roomsH').textContent = t('home.roomsH');
-  $('#quotesH').textContent = t('home.quotesH');
   renderToday();
   renderMode();
   if (!currentTrack) ui.title.textContent = t('player.none');
@@ -115,8 +114,7 @@ function renderToday() {
   var d = new Date();
   $('#tDate').textContent = d.toLocaleDateString(lang, { weekday: 'long', day: 'numeric', month: 'long' });
   $('#tHol').innerHTML = window.DAYS.pick(d, lang).map(function (x) {
-    var tag = x.when === 'today' ? t('day.today') : x.when === 'soon' ? t('day.soon') : t('day.fun');
-    return '<div><span class="tag">' + tag + '</span><span>' + x.text + '</span></div>';
+    return '<div><span class="dot">◆</span><span>' + x.text + '</span></div>';
   }).join('');
   $('#tQuotes').innerHTML = window.DAYS.twoQuotes(d, lang).map(function (q) {
     return '<figure class="quote"><q>' + q.text + '</q><cite>' + q.who + '</cite></figure>';
@@ -563,17 +561,21 @@ setInterval(ping, 2000);
    tracks/meditations на сервере, попадают в первую группу. */
 function renderTracks() {
   if (!ui.libMenu) return;
-  const groups = [
-    { key: 'lib.meditations', items: tracks.filter(x => x.group === 'meditation') },
-    { key: 'lib.demos', items: tracks.filter(x => x.group === 'demo') },
-    { key: 'lib.uploads', items: tracks.filter(x => x.group === 'upload') }
-  ];
+  /* Каждая папка в tracks на сервере — своя группа. Добавили папку —
+     она появилась здесь сама, ничего править не надо. */
+  const order = [], byGroup = {};
+  tracks.forEach(x => {
+    const g = x.group || 'upload';
+    if (!byGroup[g]) { byGroup[g] = []; order.push(g); }
+    byGroup[g].push(x);
+  });
+  order.sort((a, b) => (a === 'upload') - (b === 'upload') || a.localeCompare(b));
   let html = '';
-  groups.forEach(g => {
-    if (!g.items.length && g.key !== 'lib.meditations') return;
-    html += '<div class="gh">' + t(g.key) + '</div>';
-    if (!g.items.length) { html += '<div class="mi empty">' + t('lib.nomeditations') + '</div>'; return; }
-    g.items.forEach(x => {
+  if (!order.length) html = '<div class="mi empty">' + t('lib.empty') + '</div>';
+  order.forEach(g => {
+    const name = g === 'upload' ? t('lib.uploads') : g.replace(/[-_]/g, ' ');
+    html += '<div class="gh">' + name + '</div>';
+    byGroup[g].forEach(x => {
       const cur = currentTrack && x.id === currentTrack.id ? ' aria-current="true"' : '';
       html += '<button class="mi" data-track="' + encodeURIComponent(x.id) + '"' + cur + '>' + x.title + '</button>';
     });
@@ -745,9 +747,20 @@ $('#urlGo').onclick = async () => {
   } catch (e) { toast(t('toast.uploaderr')); }
 };
 
+/* Полный выход: раньше глушилась только картинка, а музыка,
+   микрофон и соединение с собеседником продолжали жить. */
 ui.exit.onclick = () => {
-  window.Scene.dispose();
+  stopSource();
+  buffer = null; currentTrack = null; playing = false;
+  if (musicGain) musicGain.gain.value = 0;
+  if (remoteAudio) { remoteAudio.pause(); remoteAudio.srcObject = null; }
+  if (localStream) { localStream.getTracks().forEach(x => x.stop()); localStream = null; }
+  if (pc) { try { pc.close(); } catch (e) { } pc = null; }
   if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { } ws = null; }
+  if (actx) { try { actx.suspend(); } catch (e) { } }
+  analyser = null; gotRemote = false; otherId = null; queuedSignals = [];
+  window.Scene.dispose();
+  ui.chat.innerHTML = '';
   history.replaceState(null, '', '/');
   showView('home');
   loadWeather();
@@ -984,9 +997,12 @@ async function startRoom(style) {
 }
 document.querySelectorAll('[data-style]').forEach(b => { b.onclick = () => startRoom(b.dataset.style); });
 $('#enterTop').onclick = () => startRoom('green');
+ui.goRooms.onclick = e => { e.preventDefault(); startRoom('green'); };
 
 /* ---------------- вход ---------------- */
 async function unlock() {
+  if (actx && actx.state === 'suspended') { try { await actx.resume(); } catch (e) { } }
+  if (musicGain) musicGain.gain.value = +ui.music.value / 100;
   const name = $('#name').value.trim() || t('name.guest');
   localStorage.setItem('pyr-name', name);
   try {

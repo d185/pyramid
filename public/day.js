@@ -105,25 +105,92 @@ window.DAYS = {
 
   /* Лёгкие поводы на каждый день — по ним и видно, что страница живая.
      Берутся по номеру дня в году, поэтому меняются каждые сутки. */
+  /* Дни рождения философов, литераторов и духовных учителей.
+     Имя по-русски отдельно, в остальных языках берётся латиница. */
+  roles: {
+    ph: { en: 'philosopher', ru: 'философ', es: 'filósofo', fr: 'philosophe', de: 'Philosoph' },
+    wr: { en: 'writer', ru: 'писатель', es: 'escritor', fr: 'écrivain', de: 'Schriftsteller' },
+    po: { en: 'poet', ru: 'поэт', es: 'poeta', fr: 'poète', de: 'Dichter' },
+    sp: { en: 'spiritual teacher', ru: 'духовный учитель', es: 'maestro espiritual', fr: 'maître spirituel', de: 'spiritueller Lehrer' },
+    sc: { en: 'scientist', ru: 'учёный', es: 'científico', fr: 'scientifique', de: 'Wissenschaftler' }
+  },
+
+  births: [
+    ['01-06', 'Kahlil Gibran', 'Халиль Джебран', 'po', 1883],
+    ['01-09', 'Simone de Beauvoir', 'Симона де Бовуар', 'ph', 1908],
+    ['01-15', 'Molière', 'Мольер', 'wr', 1622],
+    ['01-19', 'Edgar Allan Poe', 'Эдгар По', 'wr', 1809],
+    ['01-25', 'Virginia Woolf', 'Вирджиния Вулф', 'wr', 1882],
+    ['01-27', 'Lewis Carroll', 'Льюис Кэрролл', 'wr', 1832],
+    ['02-07', 'Charles Dickens', 'Чарльз Диккенс', 'wr', 1812],
+    ['02-08', 'Jules Verne', 'Жюль Верн', 'wr', 1828],
+    ['02-11', 'Thomas Edison', 'Томас Эдисон', 'sc', 1847],
+    ['02-12', 'Charles Darwin', 'Чарльз Дарвин', 'sc', 1809],
+    ['02-15', 'Galileo Galilei', 'Галилео Галилей', 'sc', 1564],
+    ['02-26', 'Victor Hugo', 'Виктор Гюго', 'wr', 1802],
+    ['03-06', 'Michelangelo', 'Микеланджело', 'wr', 1475],
+    ['03-14', 'Albert Einstein', 'Альберт Эйнштейн', 'sc', 1879],
+    ['03-26', 'Robert Frost', 'Роберт Фрост', 'po', 1874],
+    ['03-31', 'René Descartes', 'Рене Декарт', 'ph', 1596],
+    ['04-02', 'Hans Christian Andersen', 'Ханс Кристиан Андерсен', 'wr', 1805],
+    ['04-13', 'Seamus Heaney', 'Шеймас Хини', 'po', 1939],
+    ['04-15', 'Leonardo da Vinci', 'Леонардо да Винчи', 'sc', 1452],
+    ['04-22', 'Immanuel Kant', 'Иммануил Кант', 'ph', 1724],
+    ['04-23', 'William Shakespeare', 'Уильям Шекспир', 'wr', 1564],
+    ['05-05', 'Søren Kierkegaard', 'Сёрен Кьеркегор', 'ph', 1813],
+    ['05-07', 'Rabindranath Tagore', 'Рабиндранат Тагор', 'po', 1861],
+    ['05-12', 'Florence Nightingale', 'Флоренс Найтингейл', 'sc', 1820],
+    ['05-22', 'Arthur Conan Doyle', 'Артур Конан Дойл', 'wr', 1859],
+    ['05-25', 'Ralph Waldo Emerson', 'Ральф Уолдо Эмерсон', 'ph', 1803],
+    ['05-31', 'Walt Whitman', 'Уолт Уитмен', 'po', 1819],
+    ['06-06', 'Alexander Pushkin', 'Александр Пушкин', 'po', 1799],
+    ['06-22', 'Erich Maria Remarque', 'Эрих Мария Ремарк', 'wr', 1898],
+    ['06-28', 'Jean-Jacques Rousseau', 'Жан-Жак Руссо', 'ph', 1712],
+    ['06-29', 'Antoine de Saint-Exupéry', 'Антуан де Сент-Экзюпери', 'wr', 1900],
+    ['07-06', 'Dalai Lama XIV', 'Далай-лама XIV', 'sp', 1935],
+    ['07-12', 'Henry David Thoreau', 'Генри Дэвид Торо', 'ph', 1817],
+    ['07-18', 'Nelson Mandela', 'Нельсон Мандела', 'sp', 1918],
+    ['07-26', 'Carl Jung', 'Карл Юнг', 'ph', 1875],
+    ['07-28', 'Beatrix Potter', 'Беатрис Поттер', 'wr', 1866],
+    ['08-15', 'Walter Scott', 'Вальтер Скотт', 'wr', 1771],
+    ['08-26', 'Mother Teresa', 'Мать Тереза', 'sp', 1910],
+    ['08-28', 'Johann Wolfgang von Goethe', 'Иоганн Вольфганг Гёте', 'wr', 1749],
+    ['09-02', 'Hermann Hesse', 'Герман Гессе', 'wr', 1877],
+    ['09-09', 'Leo Tolstoy', 'Лев Толстой', 'wr', 1828],
+    ['09-21', 'H. G. Wells', 'Герберт Уэллс', 'wr', 1866],
+    ['09-26', 'T. S. Eliot', 'Томас Элиот', 'po', 1888],
+    ['09-30', 'Rumi', 'Руми', 'sp', 1207],
+    ['10-02', 'Mahatma Gandhi', 'Махатма Ганди', 'sp', 1869],
+    ['10-15', 'Friedrich Nietzsche', 'Фридрих Ницше', 'ph', 1844],
+    ['10-16', 'Oscar Wilde', 'Оскар Уайльд', 'wr', 1854],
+    ['10-19', 'Auguste Lumière', 'Огюст Люмьер', 'sc', 1862],
+    ['10-25', 'Pablo Picasso', 'Пабло Пикассо', 'wr', 1881],
+    ['11-09', 'Ivan Turgenev', 'Иван Тургенев', 'wr', 1818],
+    ['11-11', 'Fyodor Dostoevsky', 'Фёдор Достоевский', 'wr', 1821],
+    ['11-20', 'Selma Lagerlöf', 'Сельма Лагерлёф', 'wr', 1858],
+    ['11-28', 'William Blake', 'Уильям Блейк', 'po', 1757],
+    ['11-30', 'Mark Twain', 'Марк Твен', 'wr', 1835],
+    ['12-03', 'Joseph Conrad', 'Джозеф Конрад', 'wr', 1857],
+    ['12-10', 'Emily Dickinson', 'Эмили Дикинсон', 'po', 1830],
+    ['12-11', 'Alexander Solzhenitsyn', 'Александр Солженицын', 'wr', 1918],
+    ['12-16', 'Jane Austen', 'Джейн Остин', 'wr', 1775],
+    ['12-21', 'Heinrich Böll', 'Генрих Бёлль', 'wr', 1917],
+    ['12-27', 'Johannes Kepler', 'Иоганн Кеплер', 'sc', 1571],
+    ['12-30', 'Rudyard Kipling', 'Редьярд Киплинг', 'wr', 1865]
+  ],
+
+  /* Запасной лёгкий повод, если сутки выдались пустыми */
   fun: [
     { en: 'A good day to say thank you', ru: 'Хороший день сказать спасибо', es: 'Buen día para dar las gracias', fr: 'Un bon jour pour dire merci', de: 'Ein guter Tag, danke zu sagen' },
-    { en: 'Day of the first cup of tea', ru: 'День первой чашки чая', es: 'Día de la primera taza de té', fr: 'Jour de la première tasse de thé', de: 'Tag der ersten Tasse Tee' },
     { en: 'Day of a long walk', ru: 'День долгой прогулки', es: 'Día de un paseo largo', fr: 'Jour d’une longue promenade', de: 'Tag des langen Spaziergangs' },
     { en: 'Day of quiet music', ru: 'День тихой музыки', es: 'Día de la música serena', fr: 'Jour de la musique calme', de: 'Tag der leisen Musik' },
     { en: 'Day to call someone first', ru: 'День позвонить первым', es: 'Día de llamar tú primero', fr: 'Jour d’appeler le premier', de: 'Tag, zuerst anzurufen' },
-    { en: 'Day of an unhurried breakfast', ru: 'День неторопливого завтрака', es: 'Día del desayuno sin prisa', fr: 'Jour du petit-déjeuner sans hâte', de: 'Tag des gemächlichen Frühstücks' },
     { en: 'Day of an open window', ru: 'День открытого окна', es: 'Día de la ventana abierta', fr: 'Jour de la fenêtre ouverte', de: 'Tag des offenen Fensters' },
-    { en: 'Day to finish what was started', ru: 'День закончить начатое', es: 'Día de terminar lo empezado', fr: 'Jour de finir ce qu’on a commencé', de: 'Tag, Begonnenes zu beenden' },
-    { en: 'Day of a letter to a friend', ru: 'День письма другу', es: 'Día de una carta a un amigo', fr: 'Jour d’une lettre à un ami', de: 'Tag eines Briefs an einen Freund' },
     { en: 'Day of five minutes of silence', ru: 'День пяти минут тишины', es: 'Día de cinco minutos de silencio', fr: 'Jour de cinq minutes de silence', de: 'Tag der fünf Minuten Stille' },
-    { en: 'Day of the old photograph', ru: 'День старой фотографии', es: 'Día de la foto antigua', fr: 'Jour de la vieille photo', de: 'Tag des alten Fotos' },
     { en: 'Day to look at the sky', ru: 'День посмотреть на небо', es: 'Día de mirar al cielo', fr: 'Jour de regarder le ciel', de: 'Tag, zum Himmel zu schauen' },
     { en: 'Day of the unread book', ru: 'День непрочитанной книги', es: 'Día del libro sin leer', fr: 'Jour du livre non lu', de: 'Tag des ungelesenen Buches' },
     { en: 'Day of a slow evening', ru: 'День медленного вечера', es: 'Día de una tarde lenta', fr: 'Jour d’une soirée lente', de: 'Tag des langsamen Abends' },
-    { en: 'Day to forgive a small thing', ru: 'День простить мелочь', es: 'Día de perdonar una pequeñez', fr: 'Jour de pardonner une broutille', de: 'Tag, eine Kleinigkeit zu verzeihen' },
-    { en: 'Day of a walk without a phone', ru: 'День прогулки без телефона', es: 'Día de pasear sin móvil', fr: 'Jour d’une marche sans téléphone', de: 'Tag des Spaziergangs ohne Handy' },
-    { en: 'Day of an early morning', ru: 'День раннего утра', es: 'Día de la mañana temprana', fr: 'Jour du petit matin', de: 'Tag des frühen Morgens' },
-    { en: 'Day to learn one word', ru: 'День выучить одно слово', es: 'Día de aprender una palabra', fr: 'Jour d’apprendre un mot', de: 'Tag, ein Wort zu lernen' }
+    { en: 'Day of an early morning', ru: 'День раннего утра', es: 'Día de la mañana temprana', fr: 'Jour du petit matin', de: 'Tag des frühen Morgens' }
   ],
 
   dayNumber: function (d) {
@@ -131,25 +198,33 @@ window.DAYS = {
       - Date.UTC(d.getFullYear(), 0, 0)) / 86400000);
   },
 
-  /* Сегодняшний праздник, ближайший будущий и один лёгкий повод,
-     который меняется каждый день — иначе список висит неделями. */
+  key: function (d) {
+    return String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  },
+
+  /* Только то, что приходится на сегодня и ближайшие сутки.
+     Праздники и дни рождения вперемешку, без пометок. */
   pick: function (date, lang) {
-    var mm = String(date.getMonth() + 1).padStart(2, '0');
-    var dd = String(date.getDate()).padStart(2, '0');
-    var here = mm + '-' + dd;
-    var keys = Object.keys(this.holidays).sort();
-    var out = [], today = this.holidays[here];
-    var pickName = function (h) { return h[lang] || h.en; };
-
-    if (today) out.push({ when: 'today', text: pickName(today) });
-
-    var next = keys.find(function (k) { return k > here; }) || keys[0];
-    if (next && next !== here) out.push({ when: 'soon', text: pickName(this.holidays[next]), date: next });
-
-    var day = this.dayNumber(date);
-    var f = this.fun[day % this.fun.length];
-    out.push({ when: 'fun', text: f[lang] || f.en });
-    return out.slice(0, 3);
+    var self = this, out = [];
+    var tomorrow = new Date(date.getTime() + 86400000);
+    [date, tomorrow].forEach(function (d) {
+      var k = self.key(d);
+      var h = self.holidays[k];
+      if (h) out.push({ text: h[lang] || h.en });
+      self.births.forEach(function (b) {
+        if (b[0] !== k) return;
+        var role = self.roles[b[3]];
+        out.push({
+          text: (lang === 'ru' ? b[2] : b[1]) + ' · ' + (role[lang] || role.en) + ', ' + b[4]
+        });
+      });
+    });
+    // если сутки выдались пустыми, остаётся лёгкий повод дня
+    if (out.length < 2) {
+      var f = this.fun[this.dayNumber(date) % this.fun.length];
+      out.push({ text: f[lang] || f.en });
+    }
+    return out.slice(0, 6);
   },
 
   twoQuotes: function (date, lang) {

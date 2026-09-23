@@ -26,7 +26,7 @@ window.Scene = (function () {
   var MARBLE = {
     green: {
       ramp: ['#000704', '#010F09', '#032015', '#063422', '#0A4B33', '#116548', '#2C8A66'],
-      vein: '#C9992F', veinHot: '#FFF3CE', seed: 0.0,
+      vein: '#C9992F', veinHot: '#FFF3CE', speck: '#140F06', amount: 2.2, seed: 0.0,
       fog: 0x02110A, bg: 0x010A06, ambient: 0x1A7350, amb: .5,
       key: 0xFFE6A8, accent: 0x7CF0C4, rim: 0x2FBF8E, warm: 0xE0A84A,
       veinColor: 0xE9C86E, shaft: 'rgba(255,236,180,', env: ['#F6E7B8', '#3E7A5E', '#02100A'],
@@ -34,7 +34,7 @@ window.Scene = (function () {
     },
     gold: {
       ramp: ['#0E0800', '#231603', '#3E2A06', '#61430C', '#8A6317', '#B98A28', '#E0B85A'],
-      vein: '#FFD98A', veinHot: '#FFF8DC', seed: 11.3,
+      vein: '#FFD98A', veinHot: '#FFF8DC', speck: '#241203', amount: 2.0, seed: 11.3,
       fog: 0x2A1B04, bg: 0x160D02, ambient: 0xC8913A, amb: .5,
       key: 0xFFF0C8, accent: 0xFFD98A, rim: 0xD8A340, warm: 0xFFE9B0,
       veinColor: 0xFFD98A, shaft: 'rgba(255,240,200,', env: ['#FFF6D8', '#C9992F', '#2A1B04'],
@@ -42,25 +42,25 @@ window.Scene = (function () {
     },
     silver: {
       ramp: ['#050607', '#0C0F10', '#191E21', '#2A3134', '#3E474C', '#59646A', '#7D888F'],
-      vein: '#C9D8DF', veinHot: '#FFFFFF', seed: 23.7,
+      vein: '#C9D8DF', veinHot: '#FFFFFF', speck: '#0A0A0B', amount: 1.25, seed: 23.7,
       fog: 0x121618, bg: 0x080A0B, ambient: 0x7E97A3, amb: .46,
       key: 0xDCEAF2, accent: 0xBFD8E2, rim: 0x6E8A99, warm: 0xA8BCC6,
       veinColor: 0xCFE2EA, shaft: 'rgba(224,240,248,', env: ['#EAF4FA', '#5E727C', '#0A0C0D'],
       dustColor: 0xFFFFFF
     },
     blue: {
-      ramp: ['#01030A', '#030816', '#06112E', '#0A1B4C', '#0E2A75', '#1540A8', '#2A5FD0'],
-      vein: '#DCE9F7', veinHot: '#FFFFFF', seed: 41.2,
-      fog: 0x040A1C, bg: 0x01030A, ambient: 0x2F55A8, amb: .46,
+      ramp: ['#010206', '#02040E', '#04081C', '#070F30', '#0A1848', '#102566', '#1B3A8E'],
+      vein: '#DCE9F7', veinHot: '#FFFFFF', speck: '#02030A', amount: 1.35, seed: 41.2,
+      fog: 0x02050E, bg: 0x010206, ambient: 0x1E3C7A, amb: .44,
       key: 0xE8F1FF, accent: 0x7FA8F0, rim: 0x1F44A0, warm: 0x5E86D0,
       veinColor: 0xE2ECFA, shaft: 'rgba(226,238,255,', env: ['#EAF2FF', '#3E63A8', '#04070F'],
       dustColor: 0xFFFFFF
     },
     violet: {
-      ramp: ['#1A1220', '#2A1E34', '#3E2E4E', '#57446B', '#75608B', '#9C8AB0', '#CBBCD8'],
-      vein: '#FBF3FF', veinHot: '#FFFFFF', seed: 57.9,
-      fog: 0x241A2E, bg: 0x140E1C, ambient: 0xB9A4CC, amb: .55,
-      key: 0xFBF2FF, accent: 0xDCC8EE, rim: 0x8E76A8, warm: 0xD4BEE4,
+      ramp: ['#0D0812', '#17101F', '#241830', '#332445', '#46325C', '#5C4577', '#7C6296'],
+      vein: '#E8D8F2', veinHot: '#FFFFFF', speck: '#0B0710', amount: 1.15, seed: 57.9,
+      fog: 0x140E1C, bg: 0x0A0710, ambient: 0x6E5A88, amb: .48,
+      key: 0xEFE2FA, accent: 0xB9A2D4, rim: 0x6A5086, warm: 0xA88CC4,
       veinColor: 0xF6ECFF, shaft: 'rgba(250,244,255,', env: ['#FDF8FF', '#9C8AB0', '#140E1C'],
       dustColor: 0xFFFFFF
     }
@@ -71,9 +71,9 @@ window.Scene = (function () {
   var MARBLE_GLSL = [
     'precision highp float;',
     'uniform vec3 uRamp[7];',
-    'uniform vec3 uVein, uVeinHot;',
+    'uniform vec3 uVein, uVeinHot, uSpeck;',
     'uniform float uSeed, uScale, uWarp, uFreq, uBend, uBend2, uSharp, uCut, uAmount;',
-    'uniform float uDens0, uDens1, uGrain, uBandY;',
+    'uniform float uDens0, uDens1, uGrain, uBandY, uGrit, uGritA, uSpeckA;',
     'varying vec2 vP;',
     'float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7))+uSeed)*43758.5453123); }',
     'float noise(vec2 p){',
@@ -98,24 +98,29 @@ window.Scene = (function () {
     '  float rx=fbm(p+uWarp*vec2(qx,qy)+vec2(1.7,9.2),4);',
     '  float ry=fbm(p+uWarp*vec2(qx,qy)+vec2(8.3,2.8),4);',
     '  float f=fbm(p+uWarp*vec2(rx,ry),5);',
-    '  float macro=fbm(p*0.38+vec2(11.5,7.3),3);',
-    '  float shade=0.45+1.25*macro;',
-    '  vec3 col=rampAt(pow(max(0.0,f*1.25*shade),1.25));',
-    '  col=mix(col,rampAt(qx*qy*2.4),0.35);',
-    '  col=mix(col,rampAt(ry*1.6),0.25);',
+    '  float m1=fbm(p*0.34+vec2(11.5,7.3),3);',
+    '  float m2=fbm(p*0.90+vec2(-4.1,2.7),3);',
+    '  float shade=0.40+1.05*m1+0.45*m2;',
+    '  vec3 col=rampAt(pow(max(0.0,f*1.25*shade),1.2));',
+    '  col=mix(col,rampAt(qx*qy*2.6),0.34);',
+    '  col=mix(col,rampAt(ry*1.7),0.26);',
+    '  col=mix(col,rampAt(m2*1.5),0.20);',
+    '  float bl=fbm(p*2.1+vec2(77.3,19.7),3);',
+    '  col=mix(col,uSpeck,smoothstep(0.60,0.80,bl)*uSpeckA);',
+    '  col=mix(col,uSpeck,smoothstep(0.80,0.97,noise(p*uGrit))*uGritA);',
     '  float band=(p.x+p.y*uBandY)*uFreq+(f-0.5)*uBend+(rx-0.5)*uBend2;',
-    '  float s=sin(band);',
-    '  float v=pow(1.0-abs(s),uSharp);',
-    '  float s2=sin(band*0.37+2.1);',
-    '  v=max(v,pow(1.0-abs(s2),uSharp*1.6)*0.9);',
+    '  float b2=(p.x*0.55-p.y*1.15)*uFreq*0.78+(ry-0.5)*uBend*1.1+3.7;',
+    '  float v=pow(1.0-abs(sin(band)),uSharp);',
+    '  v=max(v,pow(1.0-abs(sin(band*0.37+2.1)),uSharp*1.6)*0.55);',
+    '  v=max(v,pow(1.0-abs(sin(b2)),uSharp*1.9)*0.30);',
     '  v*= (0.55+0.45*noise(p*uGrain));',
     '  v=max(0.0,(v-uCut)/(1.0-uCut));',
-    '  float hot=pow(v,2.2);',
+    '  float hot=pow(v,3.0);',
     '  float dens=fbm(p*0.52+vec2(31.4,17.9),3);',
     '  float dm=clamp((dens-uDens0)/(uDens1-uDens0),0.0,1.0);',
-    '  float amt=uAmount*(0.12+1.35*dm*dm);',
+    '  float amt=uAmount*(0.07+1.5*dm*dm);',
     '  col=mix(col,uVein,min(1.0,v*amt));',
-    '  col=mix(col,uVeinHot,min(1.0,hot*amt));',
+    '  col=mix(col,uVeinHot,min(1.0,hot*amt*0.75));',
     '  return vec4(col, clamp(v*amt,0.0,1.0));',
     '}'
   ].join('\n');
@@ -125,11 +130,14 @@ window.Scene = (function () {
       uRamp: { value: P.ramp.map(hex) },
       uVein: { value: hex(P.vein) },
       uVeinHot: { value: hex(P.veinHot) },
+      uSpeck: { value: hex(P.speck || '#0A0A0A') },
+      uSpeckA: { value: num(P.speckA, .5) },
+      uGrit: { value: 70.0 }, uGritA: { value: num(P.gritA, .38) },
       uSeed: { value: P.seed || 0 },
       uScale: { value: 4.2 }, uWarp: { value: 4.0 },
       uFreq: { value: 15.0 }, uBend: { value: 14.0 }, uBend2: { value: 8.0 },
-      uSharp: { value: 3.6 }, uCut: { value: 0.32 }, uAmount: { value: 2.3 },
-      uDens0: { value: 0.24 }, uDens1: { value: 0.66 },
+      uSharp: { value: 3.6 }, uCut: { value: 0.33 }, uAmount: { value: num(P.amount, 2.2) },
+      uDens0: { value: 0.34 }, uDens1: { value: 0.60 },
       uGrain: { value: 24.0 }, uBandY: { value: 0.35 }
     };
   }
@@ -254,7 +262,7 @@ window.Scene = (function () {
     mats.wallRT = wallRT;
 
     var floorRT = bake(P, 1024);
-    mats.floor = stone(floorRT.texture, P.veinColor, { metalness: .6, roughness: .3 });
+    mats.floor = stone(floorRT.texture, P.veinColor, { metalness: .32, roughness: .55 });
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
     mats.floorRT = floorRT;
@@ -267,7 +275,7 @@ window.Scene = (function () {
     var warm = new THREE.PointLight(P.warm, 5, 18, 2); warm.position.set(6, 3.2, -4); scene.add(warm);
 
     shaft(2.6, 8.4, 4.4, P.shaft);
-    dust = particles(340, 8, 8, .055, P.dustColor, .75);
+    dust = particles(510, 8, 8, .055, P.dustColor, .75);
     environment(P.env);
     camera.position.set(0, 1.75, 4.6);
   }
@@ -281,7 +289,7 @@ window.Scene = (function () {
 
     /* под музыку меняется только свечение прожилок */
     if (mats.wall) mats.wall.userData.glow.value = 0.55 + L * 3.6;
-    if (mats.floor) mats.floor.userData.glow.value = 0.22 + L * 1.2;
+    if (mats.floor) mats.floor.userData.glow.value = 0.12 + L * 0.6;
     if (mats.shaft) mats.shaft.opacity = .06 + L * .3;
     if (disc && playing) disc.rotation.y += dt * 1.9;
 

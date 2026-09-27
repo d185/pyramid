@@ -30,9 +30,9 @@ const ui = {
   transfer: $('#transfer'), upload: $('#upload'), lang: $('#lang'),
   hpSpk: $('#hpSpk'), hpHp: $('#hpHp'),
   toRooms: $('#toRooms'), goRooms: $('#goRooms'),
-  mic: $('#micBtn'), chatBox: $('#chatBox'), rbRole: $('#rbRole'), rbDot: $('#rbDot'),
+  chatBox: $('#chatBox'), rbRole: $('#rbRole'), rbDot: $('#rbDot'),
   libMenu: $('#libMenu'), libLbl: $('#libLbl'), addLbl: $('#addLbl'),
-  exit: $('#exitBtn'), micKnob: $('#micBtn')
+  exit: $('#exitBtn')
 };
 
 var roomStyle = 'green';   // какая комната открыта у обоих
@@ -55,6 +55,7 @@ function applyLang() {
   $('#enter').textContent = t('gate.enter');
   $('#gateMic').textContent = t('gate.mic');
   ui.libLbl.textContent = t('lib.btn');
+  $('#libTitle').textContent = t('lib.btn');
   ui.addLbl.textContent = t('add.btn');
   $('#miFile').textContent = t('add.file');
   $('#miUrl').textContent = t('add.url');
@@ -70,7 +71,8 @@ function applyLang() {
   ui.hpHp.title = t('mode.headphones');
   $('#musicBtn').title = t('vol.music');
   $('#voiceBtn').title = t('vol.voice');
-  $('#micBtn').title = t('vol.voice');
+  $('#micOn').title = t('mic.live');
+  $('#micOff').title = t('mic.muted');
   ui.chatInput.placeholder = t('chat.placeholder');
   $('#musicBtn').title = t('vol.music');
   $('#voiceBtn').title = t('vol.voice');
@@ -283,6 +285,18 @@ setInterval(() => {
 }, 200);
 
 /* ---------------- 3. голос ---------------- */
+/* Айфон не даёт звучать входящему голосу без касания пользователя.
+   Поэтому пробуем сразу, а если отказали — повторяем при первом же касании. */
+let remoteBlocked = false;
+function playRemote() {
+  const a = document.querySelector('#remoteAudio');
+  if (!a || !a.srcObject) return;
+  a.muted = false;
+  const p = a.play();
+  if (p && p.catch) p.then(() => { remoteBlocked = false; }).catch(() => { remoteBlocked = true; });
+}
+['touchend', 'click', 'keydown'].forEach(ev =>
+  document.addEventListener(ev, () => { if (remoteBlocked) playRemote(); }, { passive: true }));
 let pc = null, localStream = null, remoteAudio = $('#remoteAudio');
 let makingOffer = false, polite = true, isInitiator = false;
 let otherId = null, queuedSignals = [], gotRemote = false, stalled = 0;
@@ -349,7 +363,7 @@ function makePeer() {
     gotRemote = true;
     remoteAudio.srcObject = e.streams[0];
     remoteAudio.volume = +ui.voice.value / 100;
-    remoteAudio.play().catch(() => { });
+    playRemote();
   };
   pc.onicecandidate = e => {
     if (!e.candidate) return;
@@ -583,7 +597,7 @@ function renderTracks() {
   ui.libMenu.innerHTML = html;
   ui.libMenu.querySelectorAll('[data-track]').forEach(b => {
     b.onclick = () => {
-      closeDrops();
+      closeDrops(); closeLib();
       if (needMaster()) return;
       ws.send(JSON.stringify({ type: 'select', trackId: decodeURIComponent(b.dataset.track) }));
     };
@@ -603,9 +617,22 @@ function toggleDrop(el) {
 }
 document.addEventListener('click', e => {
   const trigger = e.target.closest('[data-drop]');
-  if (trigger) { toggleDrop($('#' + trigger.dataset.drop)); return; }
+  if (trigger) {
+    if (trigger.dataset.drop === 'dropLib') { openLib(); return; }
+    toggleDrop($('#' + trigger.dataset.drop)); return;
+  }
   if (!e.target.closest('.menu')) closeDrops();
 });
+/* Фонотека открывается шторкой снизу на всю ширину, как в музыкальных
+   плеерах: всё помещается, прокручивается и ничего не перекрывает. */
+function openLib() {
+  closeDrops();
+  renderTracks();
+  $('#libSheet').classList.add('on');
+}
+function closeLib() { $('#libSheet').classList.remove('on'); }
+$('#libSheet').onclick = e => { if (e.target === $('#libSheet')) closeLib(); };
+$('#libClose').onclick = closeLib;
 
 function renderRole(peers) {
   isMaster = selfId === masterId;
@@ -624,8 +651,10 @@ function addChat(msg) {
   const mine = msg.from === (localStorage.getItem('pyr-name') || '');
   d.className = 'bub ' + (msg.sys ? 'sys' : mine ? 'me' : 'them');
   d.textContent = msg.sys ? msg.text : msg.text;
+  // прокручиваем вниз, только если человек и так смотрел на последние
+  const atBottom = ui.chat.scrollHeight - ui.chat.scrollTop - ui.chat.clientHeight < 30;
   ui.chat.appendChild(d);
-  ui.chat.scrollTop = ui.chat.scrollHeight;
+  if (atBottom || msg.from === (localStorage.getItem('pyr-name') || '')) ui.chat.scrollTop = ui.chat.scrollHeight;
 }
 
 let toastT;
@@ -692,15 +721,17 @@ ui.voice.oninput = () => {
   $('#voiceVal').textContent = ui.voice.value;
 };
 
-ui.mic.onclick = () => {
-  micOn = !micOn;
+function setMic(on) {
+  if (micOn === on) return;
+  micOn = on;
   if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
-  ui.mic.setAttribute('aria-checked', micOn ? 'true' : 'false');
-  ui.mic.querySelector('.mknob').innerHTML = $(micOn ? '#icMic' : '#icMicOff').innerHTML;
-  ui.mic.title = micOn ? t('mic.live') : t('mic.muted');
+  $('#micOn').classList.toggle('on', micOn);
+  $('#micOff').classList.toggle('on', !micOn);
   if (!micOn && selfSpeaking) setSelfSpeaking(false);
   toast(micOn ? t('toast.micon') : t('toast.micoff'));
-};
+}
+$('#micOn').onclick = () => setMic(true);
+$('#micOff').onclick = () => setMic(false);
 
 /* громкость: нажатие раскрывает ползунок под строкой кнопок */
 function toggleSlide(which) {
@@ -824,6 +855,18 @@ ui.upload.onchange = () => {
 };
 
 /* ---------------- диагностика ---------------- */
+let checkingSince = 0;
+function voiceVerdict() {
+  if (!pc) return '—';
+  const st = pc.iceConnectionState;
+  if (st === 'checking') { if (!checkingSince) checkingSince = Date.now(); }
+  else checkingSince = 0;
+  if (st === 'connected' || st === 'completed')
+    return remoteBlocked ? t('diag.v_tap') : t('diag.v_ok');
+  if (st === 'failed' || (checkingSince && Date.now() - checkingSince > 12000))
+    return cfg.hasTurn ? t('diag.v_failturn') : t('diag.v_needturn');
+  return t('diag.v_wait');
+}
 setInterval(async () => {
   if (pc) {
     try {
@@ -843,6 +886,8 @@ setInterval(async () => {
     [t('diag.drift'), (drift * 1000).toFixed(1) + ' ms'],
     [t('diag.corr'), corrections + ', ' + t('diag.resets') + ' ' + hardResyncs],
     [t('diag.voice'), pc ? (pc.iceConnectionState + ', ' + t('diag.round') + ' ' + stats.rtt + ' ms, ' + t('diag.jitter') + ' ' + stats.jitter + ' ms, ' + t('diag.loss') + ' ' + stats.loss) : t('diag.nopeer')],
+    [t('diag.relay'), cfg.hasTurn ? t('diag.relayon') : t('diag.relayoff')],
+    [t('diag.verdict'), voiceVerdict()],
     [t('diag.ice'), !pc ? '—' : (t('diag.sent') + ' ' + iceSent + ', ' + t('diag.got') + ' ' + iceGot
         + (iceDropped ? ', ' + t('diag.rejected') + ' ' + iceDropped : '')
         + (pendingCandidates.length ? ', ' + t('diag.holding') + ' ' + pendingCandidates.length : ''))],
@@ -1001,6 +1046,7 @@ ui.goRooms.onclick = e => { e.preventDefault(); startRoom('green'); };
 
 /* ---------------- вход ---------------- */
 async function unlock() {
+  try { const a = document.querySelector('#remoteAudio'); a.muted = true; a.play().catch(() => { }); } catch (e) { }
   if (actx && actx.state === 'suspended') { try { await actx.resume(); } catch (e) { } }
   if (musicGain) musicGain.gain.value = +ui.music.value / 100;
   const name = $('#name').value.trim() || t('name.guest');

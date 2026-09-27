@@ -11,6 +11,15 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'diag.relay': 'relay (TURN)',
+    'diag.relayon': 'on',
+    'diag.relayoff': 'off',
+    'diag.verdict': 'verdict',
+    'diag.v_ok': 'voice is flowing',
+    'diag.v_tap': 'tap the screen once — the phone is holding the sound back',
+    'diag.v_wait': 'connecting…',
+    'diag.v_needturn': 'no direct path between the phones: a TURN relay is needed',
+    'diag.v_failturn': 'even the relay did not help: check the TURN keys',
     'lib.empty': 'No folders in tracks yet',
     'home.roomsH': 'Pick a stone, step inside',
     'home.quotesH': 'Two thoughts for today',
@@ -167,6 +176,15 @@ window.I18N = {
   },
 
   ru: {
+    'diag.relay': 'ретранслятор (TURN)',
+    'diag.relayon': 'включён',
+    'diag.relayoff': 'выключен',
+    'diag.verdict': 'вывод',
+    'diag.v_ok': 'голос идёт',
+    'diag.v_tap': 'коснитесь экрана — телефон придерживает звук',
+    'diag.v_wait': 'соединяюсь…',
+    'diag.v_needturn': 'прямого пути между телефонами нет: нужен ретранслятор TURN',
+    'diag.v_failturn': 'не помог даже ретранслятор: проверьте ключи TURN',
     'lib.empty': 'В папке tracks пока пусто',
     'home.roomsH': 'Выберите камень и входите',
     'home.quotesH': 'Две мысли на сегодня',
@@ -323,6 +341,15 @@ window.I18N = {
   },
 
   es: {
+    'diag.relay': 'relé (TURN)',
+    'diag.relayon': 'activo',
+    'diag.relayoff': 'apagado',
+    'diag.verdict': 'veredicto',
+    'diag.v_ok': 'la voz fluye',
+    'diag.v_tap': 'toca la pantalla: el teléfono retiene el sonido',
+    'diag.v_wait': 'conectando…',
+    'diag.v_needturn': 'no hay camino directo entre los teléfonos: hace falta un relé TURN',
+    'diag.v_failturn': 'ni el relé ayudó: revisa las claves TURN',
     'lib.empty': 'Aún no hay carpetas en tracks',
     'home.roomsH': 'Elige una piedra y entra',
     'home.quotesH': 'Dos ideas para hoy',
@@ -479,6 +506,15 @@ window.I18N = {
   },
 
   fr: {
+    'diag.relay': 'relais (TURN)',
+    'diag.relayon': 'actif',
+    'diag.relayoff': 'coupé',
+    'diag.verdict': 'verdict',
+    'diag.v_ok': 'la voix passe',
+    'diag.v_tap': 'touchez l’écran : le téléphone retient le son',
+    'diag.v_wait': 'connexion…',
+    'diag.v_needturn': 'pas de chemin direct entre les téléphones : il faut un relais TURN',
+    'diag.v_failturn': 'même le relais n’a pas aidé : vérifiez les clés TURN',
     'lib.empty': 'Aucun dossier dans tracks',
     'home.roomsH': 'Choisissez une pierre et entrez',
     'home.quotesH': 'Deux pensées pour aujourd’hui',
@@ -635,6 +671,15 @@ window.I18N = {
   },
 
   de: {
+    'diag.relay': 'Relais (TURN)',
+    'diag.relayon': 'an',
+    'diag.relayoff': 'aus',
+    'diag.verdict': 'Befund',
+    'diag.v_ok': 'die Stimme läuft',
+    'diag.v_tap': 'einmal auf den Bildschirm tippen – das Telefon hält den Ton zurück',
+    'diag.v_wait': 'verbinde…',
+    'diag.v_needturn': 'kein direkter Weg zwischen den Telefonen: ein TURN-Relais wird gebraucht',
+    'diag.v_failturn': 'auch das Relais half nicht: TURN-Schlüssel prüfen',
     'lib.empty': 'Noch keine Ordner in tracks',
     'home.roomsH': 'Wählen Sie einen Stein und treten Sie ein',
     'home.quotesH': 'Zwei Gedanken für heute',

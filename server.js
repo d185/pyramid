@@ -92,16 +92,11 @@ const server = http.createServer((req, res) => {
   if (p === '/healthz') { res.writeHead(200); return res.end('ok'); }
 
   if (p === '/api/config') {
-    const ice = [{ urls: (process.env.STUN_URL || 'stun:stun.l.google.com:19302').split(',') }];
-    if (process.env.TURN_URL) {
-      ice.push({
-        urls: process.env.TURN_URL.split(','),
-        username: process.env.TURN_USER || '',
-        credential: process.env.TURN_PASS || ''
-      });
-    }
-    res.writeHead(200, { 'Content-Type': MIME['.json'] });
-    return res.end(JSON.stringify({ iceServers: ice, hasTurn: !!process.env.TURN_URL }));
+    getIceServers().then(ice => {
+      res.writeHead(200, { 'Content-Type': MIME['.json'] });
+      res.end(JSON.stringify({ iceServers: ice, hasTurn: ice.some(x => String(x.urls).includes('turn')) }));
+    });
+    return;
   }
 
   if (p === '/api/tracks') {
@@ -177,6 +172,42 @@ const server = http.createServer((req, res) => {
   const file = p === '/' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
   serveFile(res, file);
 });
+
+/* ---------- TURN: ретранслятор для звонков между разными сетями ----------
+   Два телефона в разных сетях, особенно на мобильном интернете, почти никогда
+   не соединяются напрямую. TURN пересылает звук, когда прямой канал закрыт.
+   Бесплатно: Open Relay от Metered, 20 ГБ в месяц.
+   Ключ хранится только здесь, в переменных окружения, и в браузер не попадает. */
+let iceCache = null, iceCacheAt = 0;
+async function getIceServers() {
+  const base = [{ urls: (process.env.STUN_URL || 'stun:stun.l.google.com:19302').split(',') }];
+  // вариант 1: Metered выдаёт свежие пароли по ключу
+  if (process.env.METERED_APP && process.env.METERED_KEY) {
+    if (iceCache && Date.now() - iceCacheAt < 3600e3) return iceCache;
+    try {
+      const u = 'https://' + process.env.METERED_APP + '.metered.live/api/v1/turn/credentials?apiKey='
+        + encodeURIComponent(process.env.METERED_KEY);
+      const r = await fetch(u);
+      if (r.ok) {
+        const list = await r.json();
+        if (Array.isArray(list) && list.length) {
+          iceCache = base.concat(list); iceCacheAt = Date.now();
+          return iceCache;
+        }
+      }
+      console.log('Metered ответил', r.status, '— звонки пойдут без ретранслятора');
+    } catch (e) { console.log('Metered недоступен:', e.message); }
+  }
+  // вариант 2: адрес и пароль заданы вручную
+  if (process.env.TURN_URL) {
+    base.push({
+      urls: process.env.TURN_URL.split(','),
+      username: process.env.TURN_USER || '',
+      credential: process.env.TURN_PASS || ''
+    });
+  }
+  return base;
+}
 
 /* ---------- комнаты ---------- */
 const wss = new WebSocketServer({ server });
@@ -346,5 +377,7 @@ process.on('SIGTERM', () => {
 
 server.listen(PORT, () => {
   console.log('Pyramid слушает http://localhost:' + PORT);
-  if (!process.env.TURN_URL) console.log('TURN не настроен: за строгим NAT связь может не подняться. См. README.');
+  if (!process.env.TURN_URL && !process.env.METERED_KEY)
+    console.log('TURN не настроен: звонки между телефонами в разных сетях не соединятся. См. DEPLOY.md');
+  else console.log('TURN настроен');
 });

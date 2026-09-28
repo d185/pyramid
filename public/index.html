@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pyramid</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%231F7A57'/%3E%3Cstop offset='1' stop-color='%23052418'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M32 4 60 58H4z' fill='url(%23g)'/%3E%3Cpath d='M32 4C29 22 36 36 30 58' stroke='%23E3C878' stroke-width='2.4' fill='none'/%3E%3C/svg%3E">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -567,6 +568,17 @@ body:not(.in-room) .brand{font-size:22px;letter-spacing:.14em}
 .ls-body .mi:hover{background:rgba(255,255,255,.07)}
 .ls-body .mi[aria-current="true"]{color:var(--gold-100);background:rgba(224,200,120,.14)}
 .ls-body .mi.empty{color:#7FA294;cursor:default}
+
+/* подписи в верхней строке сжимаются по очереди: сначала «пригласить»,
+   потом «комната», последним «выйти» — и только если не влезает */
+@media (max-width:460px){ .room-bar .ib span{display:inline} .room-bar .ib{width:auto;padding:0 8px} }
+.room-bar .ib.only{width:28px;padding:0;justify-content:center}
+.room-bar.c0 #transfer span,.room-bar.c1 #invite span,.room-bar.c2 #toRooms span,.room-bar.c3 #exitBtn span{display:none}
+.room-bar.c0 #transfer,.room-bar.c1 #invite,.room-bar.c2 #toRooms,.room-bar.c3 #exitBtn{width:28px;padding:0;justify-content:center}
+
+/* поле ссылки на всю ширину пульта */
+#dropAdd .menu{left:auto;right:0;width:min(276px,calc(100vw - 28px))}
+.mi-url input{font-size:16px;padding:8px 10px}
 </style>
 </head>
 <body>
@@ -671,7 +683,7 @@ body:not(.in-room) .brand{font-size:22px;letter-spacing:.14em}
       </div>
       <button class="ib" id="invite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M18 8v6M15 11h6"/></svg><span id="invLbl"></span></button>
       <button class="ib" id="transfer" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h12l-3-3M20 16H8l3 3"/></svg><span id="trfLbl"></span></button>
-      <button class="ib only" id="toRooms" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 20H3z"/></svg></button>
+      <button class="ib" id="toRooms" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 21 20H3z"/></svg><span id="rmLbl"></span></button>
       <button class="ib only" id="diagBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.6v.2"/></svg></button>
       <button class="ib exit" id="exitBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h4v16h-4"/><path d="M11 8l-4 4 4 4M7 12h9"/></svg><span id="exitLbl"></span></button>
     </div>
@@ -716,7 +728,7 @@ body:not(.in-room) .brand{font-size:22px;letter-spacing:.14em}
         <div class="pop" id="musicSlide"><input type="range" id="music" min="0" max="100" value="60"></div>
         <button class="vb" id="musicBtn" title=""><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 18.5a2.5 2.5 0 1 1-2-2.45V6l10-2v9.5a2.5 2.5 0 1 1-2-2.45V6.6l-6 1.2v10.7z"/></svg><em id="musicVal">60</em></button>
         <div class="pop" id="voiceSlide"><input type="range" id="voice" min="0" max="100" value="85"></div>
-        <button class="vb" id="voiceBtn" title=""><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg><em id="voiceVal">85</em></button>
+        <button class="vb" id="voiceBtn" title=""><svg viewBox="0 0 24 24" fill="currentColor"><path d="M1.8 12.2c2.6-3.4 5.3-5.3 7.3-5.3 1.3 0 2.1.6 2.9 1.4.8-.8 1.6-1.4 2.9-1.4 2 0 4.7 1.9 7.3 5.3-2.7 3.9-6.1 6.1-10.2 6.1s-7.5-2.2-10.2-6.1zm3.4.1c2 2.2 4.3 3.4 6.8 3.4s4.8-1.2 6.8-3.4c-2.2.6-4.4 1-6.8 1s-4.6-.4-6.8-1z"/></svg><em id="voiceVal">85</em></button>
       </div>
 
 

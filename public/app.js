@@ -66,6 +66,8 @@ function applyLang() {
   ui.transfer.title = t('btn.transfer');
   ui.toRooms.title = t('room.change');
   $('#diagBtn').title = t('diag.title');
+  $('#rmLbl').textContent = t('btn.room');
+  requestAnimationFrame(fitBar);
   $('#exitLbl').textContent = t('btn.exit');
   ui.hpSpk.title = t('mode.speaker');
   ui.hpHp.title = t('mode.headphones');
@@ -174,75 +176,114 @@ function onPong(m) {
 }
 
 /* ---------------- 2. музыка ---------------- */
-let actx = null, musicGain = null, duckGain = null;
-let buffer = null, source = null;
-let startCtx = 0, posAtStart = 0, lastCtx = 0, pos = 0, rate = 1;
-let playing = false, serverStartAt = 0, serverOffset = 0;
-let drift = 0, corrections = 0, hardResyncs = 0;
+/* Раньше трек целиком расшифровывался в память: 8 минут — это 180 МБ,
+   получас — больше 600. Айфон на этом отказывался открывать файл
+   («нужен другой формат») или Safari убивал вкладку и перезагружал её.
+   Теперь музыка идёт потоком через обычный звуковой элемент: в памяти
+   держится лишь несколько секунд, длина трека значения не имеет. */
+let actx = null, musicGain = null, duckGain = null, voiceGain = null;
+const musicEl = new Audio();
+musicEl.preload = 'auto';
+musicEl.playsInline = true;
+musicEl.setAttribute('playsinline', '');
+musicEl.preservesPitch = true;
+let musicNode = null;
+let buffer = null;                 // оставлено ради проверок «трек загружен»: теперь это { duration }
+let playing = false, serverStartAt = 0, serverOffset = 0, pos = 0, rate = 1;
+let drift = 0, corrections = 0, hardResyncs = 0, startTimer = null, loadToken = 0;
 
 function initAudio() {
   if (actx) return;
   actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
   musicGain = actx.createGain();
   duckGain = actx.createGain();
+  voiceGain = actx.createGain();
   musicGain.gain.value = +ui.music.value / 100;
   duckGain.gain.value = 1;
+  voiceGain.gain.value = +ui.voice.value / 100;
   musicGain.connect(duckGain).connect(actx.destination);
+  voiceGain.connect(actx.destination);
+  try {
+    musicNode = actx.createMediaElementSource(musicEl);
+    musicNode.connect(musicGain);
+  } catch (e) { musicNode = null; }   // без графа звук всё равно пойдёт, просто громкость будет у элемента
+}
+
+function waitCanPlay(el, token) {
+  return new Promise((resolve, reject) => {
+    if (el.readyState >= 3) return resolve();
+    const done = ok => { cleanup(); ok ? resolve() : reject(new Error('media')); };
+    const onOk = () => done(true), onErr = () => done(false);
+    const tm = setTimeout(() => (el.readyState >= 2 ? done(true) : done(false)), 30000);
+    function cleanup() {
+      clearTimeout(tm);
+      el.removeEventListener('canplay', onOk);
+      el.removeEventListener('canplaythrough', onOk);
+      el.removeEventListener('error', onErr);
+    }
+    el.addEventListener('canplay', onOk);
+    el.addEventListener('canplaythrough', onOk);
+    el.addEventListener('error', onErr);
+  });
 }
 
 async function loadTrack(trackId) {
   const tr = tracks.find(x => x.id === trackId);
   if (!tr) return;
+  const token = ++loadToken;
   currentTrack = tr;
   ui.title.textContent = tr.title;
   setState('state.loading');
   stopSource();
   buffer = null;
+  musicEl.src = tr.url;
+  musicEl.load();
   try {
-    const res = await fetch(tr.url);
-    if (!res.ok) throw new Error('файл не отдался');
-    const bytes = await res.arrayBuffer();
-    buffer = await actx.decodeAudioData(bytes);
+    await waitCanPlay(musicEl, token);
+    if (token !== loadToken) return;              // пока грузили, выбрали другой трек
   } catch (e) {
-    buffer = null;
+    if (token !== loadToken) return;
+    // настоящая ошибка формата: элемент сам сказал, что не умеет это играть
     setState('state.badformat');
     toast(t('toast.badformat'));
     ws.send(JSON.stringify({ type: 'note', text: t('note.badformat', { title: tr.title }) }));
     return;
   }
+  buffer = { duration: musicEl.duration || 0 };
   setState('state.ready');
   ws.send(JSON.stringify({ type: 'ready', trackId }));
 }
 
 function stopSource() {
-  if (source) { try { source.stop(); } catch (e) { } source.disconnect(); source = null; }
+  clearTimeout(startTimer);
+  try { musicEl.pause(); } catch (e) { }
   playing = false;
 }
 
-/* завести буфер так, чтобы позиция совпала с общим временем */
+/* завести трек так, чтобы позиция совпала с общим временем */
 function startAt(startAtServer, offset) {
   if (!buffer) return;
   stopSource();
   serverStartAt = startAtServer; serverOffset = offset;
   const lead = (startAtServer - now()) / 1000;
-  source = actx.createBufferSource();
-  source.buffer = buffer;
-  source.playbackRate.value = 1;
-  source.connect(musicGain);
-  let when, off;
-  if (lead > 0.02) { when = actx.currentTime + lead; off = offset; }
-  else { when = actx.currentTime + 0.02; off = offset - lead + 0.02; }  // опоздали — стартуем дальше по треку
-  if (off >= buffer.duration) return;
-  source.start(when, off);
-  startCtx = when; posAtStart = off; lastCtx = when; pos = off; rate = 1;
-  playing = true;
-  setState('state.playing');
-  source.onended = () => { if (playing && pos >= buffer.duration - 0.3) { playing = false; setState('state.ended'); } };
+  rate = 1; musicEl.playbackRate = 1;
+  const go = () => {
+    const exp = expectedPos();
+    try { musicEl.currentTime = Math.max(0, exp); } catch (e) { }
+    const p = musicEl.play();
+    if (p && p.catch) p.catch(() => { });
+    playing = true;
+    setState('state.playing');
+  };
+  if (lead > 0.03) {
+    try { musicEl.currentTime = Math.max(0, offset); } catch (e) { }
+    startTimer = setTimeout(go, lead * 1000);
+  } else go();
 }
+musicEl.addEventListener('ended', () => { playing = false; setState('state.ended'); });
+musicEl.addEventListener('loadedmetadata', () => { if (buffer) buffer.duration = musicEl.duration || buffer.duration; });
 
-/* Задержка вывода у каждого устройства своя: у Мака одна, у телефона другая.
-   Выравнивать надо то, что слышно, поэтому каждый забегает вперёд ровно
-   на свою задержку. Это убирает постоянный сдвиг в несколько миллисекунд. */
+/* Задержка вывода у каждого устройства своя: выравнивать надо то, что слышно. */
 function outLatency() {
   if (!actx) return 0;
   return actx.outputLatency || actx.baseLatency || 0;
@@ -251,25 +292,22 @@ function expectedPos() {
   return serverOffset + (now() - serverStartAt) / 1000 + outLatency();
 }
 
-/* каждые 250 мс: считаем расхождение и правим темпом, а не рывком */
+/* каждые 250 мс: сверяемся с общим временем и правим темпом, а не рывком */
 setInterval(() => {
-  if (!playing || !source || !buffer) return;
-  const t = actx.currentTime;
-  pos += (t - lastCtx) * rate;
-  lastCtx = t;
+  if (!playing || !buffer || musicEl.paused) return;
+  pos = musicEl.currentTime;
   const exp = expectedPos();
   drift = pos - exp;
-
-  if (Math.abs(drift) > 0.25) {
+  if (Math.abs(drift) > 0.3) {
     hardResyncs++;
-    startAt(now() + 120, exp + 0.12);           // разошлись сильно — перезаводим
-  } else if (Math.abs(drift) > 0.007) {
+    try { musicEl.currentTime = exp + 0.05; } catch (e) { }
+    rate = 1; musicEl.playbackRate = 1;
+  } else if (Math.abs(drift) > 0.015) {
     corrections++;
-    rate = Math.max(0.98, Math.min(1.02, 1 - drift * 0.4));
-    source.playbackRate.setTargetAtTime(rate, actx.currentTime, 0.08);
+    rate = Math.max(0.95, Math.min(1.05, 1 - drift * 0.6));
+    musicEl.playbackRate = rate;
   } else if (rate !== 1) {
-    rate = 1;
-    source.playbackRate.setTargetAtTime(1, actx.currentTime, 0.1);
+    rate = 1; musicEl.playbackRate = 1;
   }
 }, 250);
 
@@ -277,21 +315,30 @@ setInterval(() => {
 setInterval(() => {
   var c = $('#tClock');
   if (c) c.textContent = new Date().toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
-  if (!buffer) return;
-  const p = playing ? pos : serverOffset;
+  if (!buffer || !buffer.duration) return;
+  const p = playing ? musicEl.currentTime : serverOffset;
   if (!seeking) ui.seek.value = Math.min(100, (p / buffer.duration) * 100);
   ui.cur.textContent = fmt(p);
   ui.rem.textContent = '−' + fmt(buffer.duration - p);
 }, 200);
 
 /* ---------------- 3. голос ---------------- */
+/* На айфоне громкость звукового элемента заблокирована Apple: ставишь 0,5,
+   читаешь — там снова 1. Поэтому ползунок голоса ни на что не влиял.
+   Проверяем это при запуске и на таких устройствах пускаем голос через
+   собственный регулятор громкости в Web Audio. */
+const VOLUME_LOCKED = (() => {
+  try { const a = document.createElement('audio'); a.volume = 0.5; return Math.abs(a.volume - 0.5) > 0.01; }
+  catch (e) { return false; }
+})();
+let voiceNode = null;
 /* Айфон не даёт звучать входящему голосу без касания пользователя.
    Поэтому пробуем сразу, а если отказали — повторяем при первом же касании. */
 let remoteBlocked = false;
 function playRemote() {
   const a = document.querySelector('#remoteAudio');
   if (!a || !a.srcObject) return;
-  a.muted = false;
+  a.muted = !!voiceNode;            // если голос идёт через свой регулятор, элемент молчит
   const p = a.play();
   if (p && p.catch) p.then(() => { remoteBlocked = false; }).catch(() => { remoteBlocked = true; });
 }
@@ -361,7 +408,14 @@ function makePeer() {
 
   pc.ontrack = e => {
     gotRemote = true;
-    remoteAudio.srcObject = e.streams[0];
+    const stream = e.streams[0];
+    remoteAudio.srcObject = stream;
+    if (VOLUME_LOCKED && actx && voiceGain && !voiceNode) {
+      try {
+        voiceNode = actx.createMediaStreamSource(stream);
+        voiceNode.connect(voiceGain);
+      } catch (err) { voiceNode = null; }
+    }
     remoteAudio.volume = +ui.voice.value / 100;
     playRemote();
   };
@@ -533,6 +587,7 @@ function connect() {
       case 'peer-left':
         if (pc) { pc.close(); pc = null; }
         remoteAudio.srcObject = null;
+        if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } voiceNode = null; }
         queuedSignals = []; otherId = null; gotRemote = false;
         peerSpeaking = false; applyDuck();
         break;
@@ -554,6 +609,7 @@ function connect() {
         break;
       case 'paused':
         stopSource(); serverOffset = m.offset; pos = m.offset;
+        try { musicEl.currentTime = m.offset; } catch (e) { }
         setState(m.offset > 0.05 ? 'state.paused' : 'state.stopped');
         break;
       case 'speaking': peerSpeaking = m.on; applyDuck(); break;
@@ -583,7 +639,7 @@ function renderTracks() {
     if (!byGroup[g]) { byGroup[g] = []; order.push(g); }
     byGroup[g].push(x);
   });
-  order.sort((a, b) => (a === 'upload') - (b === 'upload') || a.localeCompare(b));
+  order.sort((a, b) => (b === 'upload') - (a === 'upload') || a.localeCompare(b));
   let html = '';
   if (!order.length) html = '<div class="mi empty">' + t('lib.empty') + '</div>';
   order.forEach(g => {
@@ -644,6 +700,7 @@ function renderRole(peers) {
   ui.seek.disabled = !isMaster;
   ui.transfer.hidden = !(isMaster && peers.length > 1);
   ui.toRooms.hidden = !isMaster;
+  requestAnimationFrame(fitBar);
 }
 
 function addChat(msg) {
@@ -680,7 +737,7 @@ function needMaster() {
    переставляем метку, чтобы кнопка не заводила музыку исподтишка. */
 function jump(sec) {
   if (needMaster() || !buffer) return;
-  const from = playing ? pos : serverOffset;
+  const from = playing ? musicEl.currentTime : serverOffset;
   const to = Math.max(0, Math.min(buffer.duration - 0.2, from + sec));
   if (playing) ws.send(JSON.stringify({ type: 'seek', offset: to }));
   else ws.send(JSON.stringify({ type: 'pause', offset: to }));
@@ -693,7 +750,7 @@ ui.play.onclick = () => {
 };
 ui.pause.onclick = () => {
   if (needMaster() || !playing) return;
-  ws.send(JSON.stringify({ type: 'pause', offset: pos }));
+  ws.send(JSON.stringify({ type: 'pause', offset: musicEl.currentTime }));
 };
 ui.stop.onclick = () => {
   if (needMaster()) return;
@@ -717,7 +774,9 @@ ui.music.oninput = () => {
   $('#musicVal').textContent = ui.music.value;
 };
 ui.voice.oninput = () => {
-  remoteAudio.volume = +ui.voice.value / 100;
+  const v = +ui.voice.value / 100;
+  remoteAudio.volume = v;
+  if (voiceGain) voiceGain.gain.value = v;
   $('#voiceVal').textContent = ui.voice.value;
 };
 
@@ -783,9 +842,10 @@ $('#urlGo').onclick = async () => {
 ui.exit.onclick = () => {
   stopSource();
   buffer = null; currentTrack = null; playing = false;
-  if (musicGain) musicGain.gain.value = 0;
+  try { musicEl.removeAttribute('src'); musicEl.load(); } catch (e) { }
   if (remoteAudio) { remoteAudio.pause(); remoteAudio.srcObject = null; }
   if (localStream) { localStream.getTracks().forEach(x => x.stop()); localStream = null; }
+  if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } voiceNode = null; }
   if (pc) { try { pc.close(); } catch (e) { } pc = null; }
   if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { } ws = null; }
   if (actx) { try { actx.suspend(); } catch (e) { } }
@@ -950,6 +1010,17 @@ function watchReveal() {
   });
 })();
 
+/* Верхняя строка всегда в одну линию. Если подписи не влезают, они
+   превращаются в значки по одной: передача роли, приглашение, комната, выход. */
+function fitBar() {
+  const bar = document.querySelector('#roomBar');
+  if (!bar || !document.body.classList.contains('in-room')) return;
+  bar.classList.remove('c0', 'c1', 'c2', 'c3');
+  const steps = ['c0', 'c1', 'c2', 'c3'];
+  for (let i = 0; i < steps.length && bar.scrollWidth > bar.clientWidth + 1; i++) bar.classList.add(steps[i]);
+}
+addEventListener('resize', () => requestAnimationFrame(fitBar));
+
 /* ---------------- экраны ---------------- */
 function showView(name) {
   ['Home', 'Room'].forEach(function (v) {
@@ -961,6 +1032,7 @@ function showView(name) {
   ui.invite.hidden = !inRoom;
   ui.transfer.hidden = true;
   if (!inRoom) window.Scene.dispose();
+  else requestAnimationFrame(fitBar);
   window.scrollTo(0, 0);
 }
 

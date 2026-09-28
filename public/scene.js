@@ -49,17 +49,17 @@ window.Scene = (function () {
       dustColor: 0xFFFFFF
     },
     blue: {
-      ramp: ['#010206', '#02040E', '#04081C', '#070F30', '#0A1848', '#102566', '#1B3A8E'],
-      vein: '#DCE9F7', veinHot: '#FFFFFF', speck: '#2E2014', amount: 1.35, seed: 41.2,
-      fog: 0x02050E, bg: 0x010206, ambient: 0x1E3C7A, amb: .44,
+      ramp: ['#02030D', '#05081A', '#0A0F2B', '#11183D', '#1A2352', '#263168', '#3B4885'],
+      vein: '#D8DEFA', veinHot: '#FFFFFF', speck: '#2A2238', amount: 1.3, seed: 41.2,
+      fog: 0x05081A, bg: 0x02030D, ambient: 0x3A4A8C, amb: .46,
       key: 0xE8F1FF, accent: 0x7FA8F0, rim: 0x1F44A0, warm: 0x5E86D0,
       veinColor: 0xE2ECFA, shaft: 'rgba(226,238,255,', env: ['#EAF2FF', '#3E63A8', '#04070F'],
       dustColor: 0xFFFFFF
     },
     violet: {
-      ramp: ['#0D0812', '#17101F', '#241830', '#332445', '#46325C', '#5C4577', '#7C6296'],
-      vein: '#E8D8F2', veinHot: '#FFFFFF', speck: '#3A2618', amount: 1.15, seed: 57.9,
-      fog: 0x140E1C, bg: 0x0A0710, ambient: 0x6E5A88, amb: .48,
+      ramp: ['#0C0512', '#170A22', '#241235', '#351C4C', '#4A2966', '#623A84', '#8458A8'],
+      vein: '#F2C9B8', veinHot: '#FFF1EA', speck: '#3A2226', amount: 1.35, seed: 57.9,
+      fog: 0x170A22, bg: 0x0C0512, ambient: 0x7A5A98, amb: .48,
       key: 0xEFE2FA, accent: 0xB9A2D4, rim: 0x6A5086, warm: 0xA88CC4,
       veinColor: 0xF6ECFF, shaft: 'rgba(250,244,255,', env: ['#FDF8FF', '#9C8AB0', '#140E1C'],
       dustColor: 0xFFFFFF
@@ -73,7 +73,8 @@ window.Scene = (function () {
     'uniform vec3 uRamp[7];',
     'uniform vec3 uVein, uVeinHot, uSpeck;',
     'uniform float uSeed, uScale, uWarp, uFreq, uBend, uBend2, uSharp, uCut, uAmount;',
-    'uniform float uDens0, uDens1, uGrain, uBandY, uDarkA, uBrownA;',
+    'uniform float uDens0, uDens1, uGrain, uBandY, uDarkA, uBrownA, uDetail;',
+    'uniform vec3 uGoldThin;',
     'varying vec2 vP;',
     'float hash(vec2 p){ return fract(sin(dot(p,vec2(127.1,311.7))+uSeed)*43758.5453123); }',
     'float noise(vec2 p){',
@@ -92,6 +93,7 @@ window.Scene = (function () {
     '    if(u>=lo && u<lo+1.0) c=mix(uRamp[i],uRamp[i+1],u-lo); }',
     '  return c;',
     '}',
+    'float vn(float b,float k){ return pow(1.0-abs(sin(b)),k); }',
     'vec4 marble(vec2 uv){',
     '  vec2 p = uv*uScale;',
     '  float qx=fbm(p,4), qy=fbm(p+vec2(5.2,1.3),4);',
@@ -114,6 +116,30 @@ window.Scene = (function () {
     '  float br=(p.x*0.7-p.y*0.5)*uFreq*0.9+(ry-0.5)*uBend*1.4+2.2;',
     '  float bv=pow(1.0-abs(sin(br)),7.0)*smoothstep(0.45,0.72,fbm(p*0.8+vec2(9.1,44.2),3));',
     '  col=mix(col,uSpeck,bv*uBrownA);',
+    '  float glowMask=0.0;',
+    '  if(uDetail>0.5){',
+    '    float F=uFreq, B=uBend;',
+    '    float z2=smoothstep(0.25,0.75,fbm(p*0.45+vec2(61.7,23.1),3));',
+    '    float z3=smoothstep(0.35,0.70,fbm(p*0.7+vec2(71.3,5.9),3));',
+    '    float e4=vn((-p.x*0.4+p.y*0.9)*F*0.95+(qx-0.5)*B*1.5+12.1,6.0)*0.55;',
+    '    float e5=vn((p.x*1.1-p.y*0.7)*F*1.9+(rx-0.5)*B*2.0+15.7,11.0)*0.6;',
+    '    float e7=vn((p.x*0.65+p.y*0.95)*F*1.55+(ry-0.5)*B*1.7+42.5,8.0)*0.5;',
+    '    col=mix(col,col*0.4,max(e4,max(e5,e7))*z2*0.9);',
+    '    float e6=vn((p.x*0.2+p.y*1.3)*F*2.6+(f-0.5)*B*2.2+19.3,16.0);',
+    '    col=mix(col,vec3(0.012,0.010,0.009),e6*z3*0.92);',
+    '    float z4=smoothstep(0.28,0.72,fbm(p*0.5+vec2(81.2,13.3),3));',
+    '    float l1=vn((p.x*0.8+p.y*0.1)*F*0.55+(qy-0.5)*B+21.4,3.5)*0.22;',
+    '    float l2=vn((-p.x*0.6+p.y*0.8)*F*1.2+(ry-0.5)*B*1.4+25.2,7.0)*0.32;',
+    '    float l3=vn((p.x*1.3+p.y*0.5)*F*2.2+(f-0.5)*B*1.8+28.8,12.0)*0.42;',
+    '    float l4=vn((p.x*0.35-p.y*0.9)*F*1.7+(qx-0.5)*B*1.9+46.1,9.0)*0.30;',
+    '    col=mix(col,mix(col,vec3(1.0),0.5),max(max(l1,l2),max(l3,l4))*z4);',
+    '    float zg=smoothstep(0.38,0.68,fbm(p*0.55+vec2(91.4,37.7),3));',
+    '    float gv=vn((p.x*0.5+p.y*1.1)*F*1.7+(rx-0.5)*B*2.1+33.3,14.0)*zg;',
+    '    col=mix(col,uGoldThin,gv*0.9);',
+    '    float zw=smoothstep(0.36,0.66,fbm(p*0.6+vec2(101.9,49.5),3));',
+    '    glowMask=vn((p.x-p.y*0.35)*F*2.4+(qx-0.5)*B*2.3+37.1,18.0)*zw;',
+    '    col=mix(col,vec3(1.0,0.99,0.97),glowMask*0.85);',
+    '  }',
     '  float band=(p.x+p.y*uBandY)*uFreq+(f-0.5)*uBend+(rx-0.5)*uBend2;',
     '  float b2=(p.x*0.55-p.y*1.15)*uFreq*0.78+(ry-0.5)*uBend*1.1+3.7;',
     '  float v=pow(1.0-abs(sin(band)),uSharp);',
@@ -127,7 +153,7 @@ window.Scene = (function () {
     '  float amt=uAmount*(0.07+1.5*dm*dm);',
     '  col=mix(col,uVein,min(1.0,v*amt));',
     '  col=mix(col,uVeinHot,min(1.0,hot*amt*0.75));',
-    '  return vec4(col, clamp(v*amt,0.0,1.0));',
+    '  return vec4(col, clamp(glowMask,0.0,1.0));',
     '}'
   ].join('\n');
 
@@ -139,6 +165,8 @@ window.Scene = (function () {
       uSpeck: { value: hex(P.speck || '#0A0A0A') },
       uDarkA: { value: num(P.darkA, .85) },
       uBrownA: { value: num(P.brownA, .75) },
+      uDetail: { value: 1.0 },
+      uGoldThin: { value: hex('#E9C46A') },
       uSeed: { value: P.seed || 0 },
       uScale: { value: 4.2 }, uWarp: { value: 4.0 },
       uFreq: { value: 15.0 }, uBend: { value: 14.0 }, uBend2: { value: 8.0 },
@@ -259,19 +287,36 @@ window.Scene = (function () {
     m.position.y = y; scene.add(m); mats.shaft = m.material;
   }
 
+  /* мягкий блик на полу: тёплое пятно света, лежащее на камне */
+  function glint(x, z, r, opacity) {
+    var c = document.createElement('canvas'); c.width = c.height = 128;
+    var g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,248,232,1)'); gr.addColorStop(.4, 'rgba(255,248,232,.35)');
+    gr.addColorStop(1, 'rgba(255,248,232,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+    var m = new THREE.Mesh(new THREE.CircleGeometry(r, 32), new THREE.MeshBasicMaterial({
+      map: new THREE.CanvasTexture(c), transparent: true, opacity: opacity,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    }));
+    m.rotation.x = -Math.PI / 2; m.position.set(x, .01, z); scene.add(m);
+  }
+
   function build(P) {
     builds++;
     var wallRT = bake(P, 1536);
-    mats.wall = stone(wallRT.texture, P.veinColor, { side: THREE.BackSide, metalness: .3, roughness: .5 });
+    mats.wall = stone(wallRT.texture, 0xFFF6E6, { side: THREE.BackSide, metalness: .3, roughness: .5 });
     var pyr = new THREE.Mesh(new THREE.ConeGeometry(9, 12, 4, 24, true), mats.wall);
     pyr.rotation.y = Math.PI / 4; pyr.position.y = 6; scene.add(pyr);
     mats.wallRT = wallRT;
 
     var floorRT = bake(P, 1024);
-    mats.floor = stone(floorRT.texture, P.veinColor, { metalness: .32, roughness: .55 });
+    mats.floor = stone(floorRT.texture, 0xFFF6E6, { metalness: .08, roughness: .42 });
+    mats.floor.envMapIntensity = .35;
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
     mats.floorRT = floorRT;
+    glint(-1.6, .9, 2.4, .10);
+    glint(2.1, -1.8, 1.8, .07);
 
     lights.key = new THREE.PointLight(P.key, 15, 26, 2);
     lights.key.position.set(0, 8.4, 0); scene.add(lights.key);
@@ -295,7 +340,7 @@ window.Scene = (function () {
 
     /* под музыку меняется только свечение прожилок */
     if (mats.wall) mats.wall.userData.glow.value = 0.55 + L * 3.6;
-    if (mats.floor) mats.floor.userData.glow.value = 0.12 + L * 0.6;
+    if (mats.floor) mats.floor.userData.glow.value = 0.08 + L * 0.5;
     if (mats.shaft) mats.shaft.opacity = .06 + L * .3;
     if (disc && playing) disc.rotation.y += dt * 1.9;
 
@@ -346,6 +391,7 @@ window.Scene = (function () {
       try {
         if (!r) { r = new THREE.WebGLRenderer({ antialias: false }); own = true; renderer = r; }
         var u = marbleUniforms(P);
+        u.uDetail.value = 0.0;           // маленьким картинкам детали ни к чему
         var mat = new THREE.ShaderMaterial({
           uniforms: u,
           vertexShader: 'varying vec2 vP;\nvoid main(){ vP=uv; gl_Position=vec4(position.xy,0.0,1.0); }',
@@ -415,10 +461,10 @@ window.Scene = (function () {
       if (mats.floorRT) mats.floorRT.dispose();
       mats.wallRT = wallRT; mats.floorRT = floorRT;
       mats.wall.map = wallRT.texture;
-      mats.wall.emissive = new THREE.Color(P.veinColor);
+      mats.wall.emissive = new THREE.Color(0xFFF6E6);
       mats.wall.needsUpdate = true;
       mats.floor.map = floorRT.texture;
-      mats.floor.emissive = new THREE.Color(P.veinColor);
+      mats.floor.emissive = new THREE.Color(0xFFF6E6);
       mats.floor.needsUpdate = true;
       scene.background = new THREE.Color(P.bg);
       scene.fog.color = new THREE.Color(P.fog);

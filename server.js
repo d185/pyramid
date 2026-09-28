@@ -92,16 +92,11 @@ const server = http.createServer((req, res) => {
   if (p === '/healthz') { res.writeHead(200); return res.end('ok'); }
 
   if (p === '/api/config') {
-    const ice = [{ urls: (process.env.STUN_URL || 'stun:stun.l.google.com:19302').split(',') }];
-    if (process.env.TURN_URL) {
-      ice.push({
-        urls: process.env.TURN_URL.split(','),
-        username: process.env.TURN_USER || '',
-        credential: process.env.TURN_PASS || ''
-      });
-    }
-    res.writeHead(200, { 'Content-Type': MIME['.json'] });
-    return res.end(JSON.stringify({ iceServers: ice, hasTurn: !!process.env.TURN_URL }));
+    getIceServers().then(ice => {
+      res.writeHead(200, { 'Content-Type': MIME['.json'] });
+      res.end(JSON.stringify({ iceServers: ice, hasTurn: ice.some(x => String(x.urls).includes('turn')) }));
+    });
+    return;
   }
 
   if (p === '/api/tracks') {
@@ -177,6 +172,81 @@ const server = http.createServer((req, res) => {
   const file = p === '/' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
   serveFile(res, file);
 });
+
+/* ---------- TURN: ретранслятор для звонков между разными сетями ----------
+   Два телефона в разных сетях, особенно на мобильном интернете, почти никогда
+   не соединяются напрямую. TURN пересылает звук, когда прямой канал закрыт.
+   Бесплатно: Open Relay от Metered, 20 ГБ в месяц.
+   Ключ хранится только здесь, в переменных окружения, и в браузер не попадает. */
+let iceCache = null, iceCacheAt = 0;
+
+/* Metered показывает настройки как кусок кода на JavaScript, а не как строгий JSON:
+   ключи без кавычек, одинарные кавычки, запятые в конце. Принимаем любой вариант —
+   хоть весь фрагмент целиком, хоть только массив. */
+function parseIceText(text) {
+  if (!text) return null;
+  const start = text.indexOf('[');
+  if (start < 0) return null;
+  let depth = 0, end = -1;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '[') depth++;
+    else if (text[i] === ']' && --depth === 0) { end = i; break; }
+  }
+  if (end < 0) return null;
+  let body = text.slice(start, end + 1)
+    .replace(/\/\/[^\n]*/g, '')                            // комментарии
+    .replace(/'([^']*)'/g, (m, v) => JSON.stringify(v))      // одинарные кавычки
+    .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:/g, '$1"$2":')  // ключи без кавычек
+    .replace(/,\s*([}\]])/g, '$1');                          // запятые в конце
+  try {
+    const arr = JSON.parse(body);
+    return Array.isArray(arr) && arr.length ? arr : null;
+  } catch (e) { return null; }
+}
+
+async function getIceServers() {
+  // вариант 0: настройки из панели Metered вставлены целиком
+  const pasted = parseIceText(process.env.ICE_SERVERS);
+  if (pasted) return pasted;
+
+  const base = [{ urls: (process.env.STUN_URL || 'stun:stun.l.google.com:19302').split(',') }];
+  // вариант 0б: полный адрес запроса из кнопки Show API Key
+  if (process.env.METERED_URL) {
+    if (iceCache && Date.now() - iceCacheAt < 3600e3) return iceCache;
+    try {
+      const r = await fetch(process.env.METERED_URL);
+      const list = r.ok ? await r.json() : null;
+      if (Array.isArray(list) && list.length) { iceCache = list; iceCacheAt = Date.now(); return list; }
+      console.log('Metered ответил', r.status);
+    } catch (e) { console.log('Metered недоступен:', e.message); }
+  }
+  // вариант 1: Metered выдаёт свежие пароли по ключу
+  if (process.env.METERED_APP && process.env.METERED_KEY) {
+    if (iceCache && Date.now() - iceCacheAt < 3600e3) return iceCache;
+    try {
+      const u = 'https://' + process.env.METERED_APP + '.metered.live/api/v1/turn/credentials?apiKey='
+        + encodeURIComponent(process.env.METERED_KEY);
+      const r = await fetch(u);
+      if (r.ok) {
+        const list = await r.json();
+        if (Array.isArray(list) && list.length) {
+          iceCache = base.concat(list); iceCacheAt = Date.now();
+          return iceCache;
+        }
+      }
+      console.log('Metered ответил', r.status, '— звонки пойдут без ретранслятора');
+    } catch (e) { console.log('Metered недоступен:', e.message); }
+  }
+  // вариант 2: адрес и пароль заданы вручную
+  if (process.env.TURN_URL) {
+    base.push({
+      urls: process.env.TURN_URL.split(','),
+      username: process.env.TURN_USER || '',
+      credential: process.env.TURN_PASS || ''
+    });
+  }
+  return base;
+}
 
 /* ---------- комнаты ---------- */
 const wss = new WebSocketServer({ server });
@@ -346,5 +416,9 @@ process.on('SIGTERM', () => {
 
 server.listen(PORT, () => {
   console.log('Pyramid слушает http://localhost:' + PORT);
-  if (!process.env.TURN_URL) console.log('TURN не настроен: за строгим NAT связь может не подняться. См. README.');
+  if (process.env.ICE_SERVERS && !parseIceText(process.env.ICE_SERVERS))
+    console.log('ICE_SERVERS задан, но не разобрался — проверьте, что скопирован весь массив');
+  if (!process.env.TURN_URL && !process.env.METERED_KEY && !process.env.METERED_URL && !parseIceText(process.env.ICE_SERVERS))
+    console.log('TURN не настроен: звонки между телефонами в разных сетях не соединятся. См. DEPLOY.md');
+  else console.log('TURN настроен');
 });

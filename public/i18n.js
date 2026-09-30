@@ -11,6 +11,14 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'toast.tapmusic': 'Tap the screen to hear the music',
+    'diag.musicstate': 'music',
+    'diag.m_playing': 'playing',
+    'diag.m_paused': 'paused',
+    'diag.m_blocked': 'held by the phone — tap the screen',
+    'diag.voicepath': 'voice volume',
+    'diag.vp_gain': 'own control',
+    'diag.vp_el': 'phone default',
     'btn.room': 'Room',
     'diag.relay': 'relay (TURN)',
     'diag.relayon': 'on',
@@ -177,6 +185,14 @@ window.I18N = {
   },
 
   ru: {
+    'toast.tapmusic': 'Коснитесь экрана, чтобы зазвучала музыка',
+    'diag.musicstate': 'музыка',
+    'diag.m_playing': 'играет',
+    'diag.m_paused': 'на паузе',
+    'diag.m_blocked': 'телефон придержал — коснитесь экрана',
+    'diag.voicepath': 'громкость голоса',
+    'diag.vp_gain': 'свой регулятор',
+    'diag.vp_el': 'регулятор телефона',
     'btn.room': 'Комната',
     'diag.relay': 'ретранслятор (TURN)',
     'diag.relayon': 'включён',
@@ -343,6 +359,14 @@ window.I18N = {
   },
 
   es: {
+    'toast.tapmusic': 'Toca la pantalla para oír la música',
+    'diag.musicstate': 'música',
+    'diag.m_playing': 'sonando',
+    'diag.m_paused': 'en pausa',
+    'diag.m_blocked': 'el teléfono la retiene — toca la pantalla',
+    'diag.voicepath': 'volumen de voz',
+    'diag.vp_gain': 'control propio',
+    'diag.vp_el': 'del teléfono',
     'btn.room': 'Sala',
     'diag.relay': 'relé (TURN)',
     'diag.relayon': 'activo',
@@ -509,6 +533,14 @@ window.I18N = {
   },
 
   fr: {
+    'toast.tapmusic': 'Touchez l’écran pour entendre la musique',
+    'diag.musicstate': 'musique',
+    'diag.m_playing': 'joue',
+    'diag.m_paused': 'en pause',
+    'diag.m_blocked': 'retenue par le téléphone — touchez l’écran',
+    'diag.voicepath': 'volume de la voix',
+    'diag.vp_gain': 'réglage propre',
+    'diag.vp_el': 'réglage du téléphone',
     'btn.room': 'Salle',
     'diag.relay': 'relais (TURN)',
     'diag.relayon': 'actif',
@@ -675,6 +707,14 @@ window.I18N = {
   },
 
   de: {
+    'toast.tapmusic': 'Auf den Bildschirm tippen, um die Musik zu hören',
+    'diag.musicstate': 'Musik',
+    'diag.m_playing': 'läuft',
+    'diag.m_paused': 'pausiert',
+    'diag.m_blocked': 'vom Telefon zurückgehalten — tippen',
+    'diag.voicepath': 'Stimmlautstärke',
+    'diag.vp_gain': 'eigener Regler',
+    'diag.vp_el': 'Telefonregler',
     'btn.room': 'Raum',
     'diag.relay': 'Relais (TURN)',
     'diag.relayon': 'an',

@@ -187,7 +187,35 @@ musicEl.preload = 'auto';
 musicEl.playsInline = true;
 musicEl.setAttribute('playsinline', '');
 musicEl.preservesPitch = true;
-let musicNode = null;
+let musicNode = null, musicBlocked = false;
+/* Safari разрешает звуковому элементу начать играть только в ответ на касание.
+   Команда «играть» приходит с сервера, без касания, — и Safari её молча отклонял.
+   Поэтому в момент нажатия «Войти» элемент один раз проигрывает тишину:
+   после этого Safari считает его разрешённым и пускает дальнейшие команды. */
+const SILENT = 'data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
+function blessMusic() {
+  if (musicEl._blessed) return;
+  try {
+    musicEl.src = SILENT;
+    musicEl.muted = true;
+    const p = musicEl.play();
+    const done = () => {
+      if (musicEl.src === SILENT) musicEl.pause();
+      musicEl.muted = false;
+      musicEl._blessed = true;
+    };
+    if (p && p.then) p.then(done).catch(() => { musicEl.muted = false; }); else done();
+  } catch (e) { musicEl.muted = false; }
+}
+/* если всё же отказали — любое касание повторяет попытку */
+function retryMusic() {
+  if (actx && actx.state !== 'running') actx.resume().catch(() => { });
+  if (!musicBlocked || !playing) return;
+  const p = musicEl.play();
+  if (p && p.then) p.then(() => { musicBlocked = false; }).catch(() => { });
+}
+['touchend', 'click', 'keydown'].forEach(ev =>
+  document.addEventListener(ev, retryMusic, { passive: true }));
 let buffer = null;                 // оставлено ради проверок «трек загружен»: теперь это { duration }
 let playing = false, serverStartAt = 0, serverOffset = 0, pos = 0, rate = 1;
 let drift = 0, corrections = 0, hardResyncs = 0, startTimer = null, loadToken = 0;
@@ -270,10 +298,14 @@ function startAt(startAtServer, offset) {
   const go = () => {
     const exp = expectedPos();
     try { musicEl.currentTime = Math.max(0, exp); } catch (e) { }
-    const p = musicEl.play();
-    if (p && p.catch) p.catch(() => { });
+    if (actx && actx.state !== 'running') actx.resume().catch(() => { });
     playing = true;
     setState('state.playing');
+    const p = musicEl.play();
+    if (p && p.then) p.then(() => { musicBlocked = false; }).catch(() => {
+      musicBlocked = true;
+      toast(t('toast.tapmusic'));
+    });
   };
   if (lead > 0.03) {
     try { musicEl.currentTime = Math.max(0, offset); } catch (e) { }
@@ -338,7 +370,8 @@ let remoteBlocked = false;
 function playRemote() {
   const a = document.querySelector('#remoteAudio');
   if (!a || !a.srcObject) return;
-  a.muted = !!voiceNode;            // если голос идёт через свой регулятор, элемент молчит
+  // голос через свой регулятор — элемент молчит, но играет, иначе Chrome не отдаёт звук
+  a.muted = !!voiceNode && !!actx && actx.state === 'running';
   const p = a.play();
   if (p && p.catch) p.then(() => { remoteBlocked = false; }).catch(() => { remoteBlocked = true; });
 }
@@ -410,7 +443,11 @@ function makePeer() {
     gotRemote = true;
     const stream = e.streams[0];
     remoteAudio.srcObject = stream;
-    if (VOLUME_LOCKED && actx && voiceGain && !voiceNode) {
+    /* Голос идёт через собственный регулятор громкости на всех устройствах:
+       громкость звукового элемента на айфоне заблокирована, а на части
+       андроидов Chrome тоже её не слушает, если внутри звонок. */
+    if (actx && voiceGain && (!voiceNode || voiceNode.mediaStream !== stream)) {
+      if (voiceNode) { try { voiceNode.disconnect(); } catch (err) { } }
       try {
         voiceNode = actx.createMediaStreamSource(stream);
         voiceNode.connect(voiceGain);
@@ -954,6 +991,8 @@ setInterval(async () => {
     [t('diag.stream'), !pc ? '—' : (gotRemote ? (remoteAudio.paused ? t('diag.streamsilent') : t('diag.streamplays')) : t('diag.streamnone'))],
     [t('diag.me'), pc ? (isInitiator ? t('diag.calling') : t('diag.answering')) : '—'],
     [t('diag.aec'), headphones ? t('diag.aecoff') : t('diag.aecon')],
+    [t('diag.musicstate'), !buffer ? '—' : musicBlocked ? t('diag.m_blocked') : (musicEl.paused ? t('diag.m_paused') : t('diag.m_playing')) + (actx ? ', ' + actx.state : '')],
+    [t('diag.voicepath'), !gotRemote ? '—' : voiceNode ? t('diag.vp_gain') : t('diag.vp_el')],
     [t('diag.level'), Math.round(lastLevel * 100) + '%' + (window.Scene.supported() ? ', ' + window.Scene.fps() + ' fps' : '')]
   ];
   ui.diag.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
@@ -963,15 +1002,34 @@ setInterval(async () => {
    Рисуется один раз, лежит картинкой и медленно плывёт. */
 /* Фон главной и грани логотипа — тот же камень, испечённый видеокартой.
    Считается один раз за доли секунды, картинок не скачивается. */
+/* Картинку камня для логотипа печёт видеокарта. Айфон при самом первом
+   обращении к ней иногда отдаёт пустую, почти чёрную картинку — отсюда
+   чёрный логотип на миг при первом входе. Теперь картинка проверяется,
+   и если она тёмная — ставится зелёная заглушка и через полсекунды повтор. */
+function looksEmpty(cv) {
+  try {
+    const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
+    let sum = 0, n = 0;
+    for (let i = 0; i < d.length; i += 64) { sum += d[i] + d[i + 1] + d[i + 2]; n++; }
+    return sum / n < 12;
+  } catch (e) { return false; }
+}
+function goodImage(kind, w, h) {
+  const c = window.Scene.image(kind, w, h);
+  return c && !looksEmpty(c) ? c : null;
+}
+let artTries = 0;
 function paintMarbleArt() {
   if (!window.Scene || !window.Scene.supported()) return;
+  const probe = goodImage('green', 32, 32);
+  if (!probe) { if (++artTries < 4) setTimeout(paintMarbleArt, 600); return; }
   const hero = $('#heroMarble');
-  const img = window.Scene.image('green', 512, 384);
+  const img = goodImage('green', 512, 384);
   if (hero && img) {
     hero.width = 512; hero.height = 384;
     hero.getContext('2d').drawImage(img, 0, 0);
   }
-  const small = window.Scene.image('green', 128, 200);
+  const small = goodImage('green', 128, 200);
   if (small) {
     const url = small.toDataURL();
     document.querySelectorAll('.pyr .face').forEach(f => {
@@ -981,7 +1039,7 @@ function paintMarbleArt() {
   }
   [['bgPyr', 'green'], ['bgGld', 'gold'], ['bgSlv', 'silver']].forEach(p => {
     const el = $('#' + p[0]);
-    const c = window.Scene.image(p[1], 256, 240);
+    const c = goodImage(p[1], 256, 240);
     if (el && c) { el.style.backgroundImage = 'url(' + c.toDataURL() + ')'; el.style.backgroundSize = 'cover'; }
   });
 }
@@ -1118,6 +1176,8 @@ ui.goRooms.onclick = e => { e.preventDefault(); startRoom('green'); };
 
 /* ---------------- вход ---------------- */
 async function unlock() {
+  initAudio();
+  blessMusic();
   try { const a = document.querySelector('#remoteAudio'); a.muted = true; a.play().catch(() => { }); } catch (e) { }
   if (actx && actx.state === 'suspended') { try { await actx.resume(); } catch (e) { } }
   if (musicGain) musicGain.gain.value = +ui.music.value / 100;
@@ -1156,7 +1216,7 @@ window.LANGS.forEach(l => {
 });
 $('#name').value = localStorage.getItem('pyr-name') || '';
 applyLang();
-paintMarbleArt();
+setTimeout(paintMarbleArt, 250);
 watchReveal();
 addEventListener('scroll', () => {
   const top = document.querySelector('.top');

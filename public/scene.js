@@ -297,9 +297,9 @@ window.Scene = (function () {
     mats.wallRT = wallRT;
 
     var floorRT = bake(P, 1024);
-    mats.floor = stone(floorRT.texture, 0xFFF6E6, { metalness: .3, roughness: .5 });
-    mats.floor.color = new THREE.Color(0.44, 0.44, 0.44);
-    mats.floor.envMapIntensity = .5;
+    mats.floor = stone(floorRT.texture, 0xFFF6E6, { metalness: 0, roughness: .78 });
+    mats.floor.color = new THREE.Color(0.62, 0.62, 0.62);
+    mats.floor.envMapIntensity = 0.04;
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
     mats.floorRT = floorRT;

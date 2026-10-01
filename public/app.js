@@ -231,6 +231,8 @@ function initAudio() {
   voiceGain.gain.value = +ui.voice.value / 100;
   musicGain.connect(duckGain).connect(actx.destination);
   voiceGain.connect(actx.destination);
+  outAn = actx.createAnalyser(); outAn.fftSize = 512;
+  voiceGain.connect(outAn);
   try {
     musicNode = actx.createMediaElementSource(musicEl);
     musicNode.connect(musicGain);
@@ -255,6 +257,38 @@ function waitCanPlay(el, token) {
   });
 }
 
+/* Трек скачивается целиком, но в сжатом виде — ровно столько, сколько весит
+   mp3: получасовая медитация занимает около 30 МБ, а не 600, как при полной
+   расшифровке. После этого он играет из памяти устройства: сеть больше не
+   может прервать звук посреди трека, а перемотка мгновенна. Именно сетевые
+   паузы давали заикание у гостя на мобильном интернете. */
+let blobUrl = null, stalls = 0;
+
+async function fetchWhole(url, token) {
+  const r = await fetch(url, { cache: 'force-cache' });
+  if (!r.ok) { const e = new Error('http'); e.status = r.status; throw e; }
+  const total = +r.headers.get('content-length') || 0;
+  const type = r.headers.get('content-type') || 'audio/mpeg';
+  if (!r.body || !r.body.getReader) return r.blob();
+  const reader = r.body.getReader(), parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (token !== loadToken) { try { reader.cancel(); } catch (e) { } throw new Error('cancelled'); }
+    parts.push(value); got += value.length;
+    if (total) ui.state.textContent = t('state.loading') + ' ' + Math.round(got / total * 100) + '%';
+  }
+  return new Blob(parts, { type });
+}
+
+function reportTrack(tr, reason) {
+  setState(reason === 'badformat' ? 'state.badformat' : 'state.loadfail');
+  const text = t('bad.' + reason, { title: tr.title });
+  toast(text);
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'note', text }));
+}
+
 async function loadTrack(trackId) {
   const tr = tracks.find(x => x.id === trackId);
   if (!tr) return;
@@ -264,27 +298,23 @@ async function loadTrack(trackId) {
   setState('state.loading');
   stopSource();
   buffer = null;
-  musicEl.src = tr.url;
-  musicEl.load();
-  try {
-    await waitCanPlay(musicEl, token);
-    if (token !== loadToken) return;              // пока грузили, выбрали другой трек
-  } catch (e) {
-    if (token !== loadToken) return;
-    const code = musicEl.error && musicEl.error.code;
-    // 4 — элемент прямо сказал, что формат не поддерживает. Всё остальное —
-    // сеть или сервер, и это повод попробовать ещё раз, а не винить mp3.
-    if (code !== 4 && !tr._retried) {
-      tr._retried = true;
-      setTimeout(() => { if (token === loadToken) loadTrack(trackId); }, 1500);
-      return;
-    }
-    const key = code === 4 ? 'badformat' : 'loadfail';
-    setState('state.' + key);
-    toast(t('toast.' + key));
-    ws.send(JSON.stringify({ type: 'note', text: t('note.' + key, { title: tr.title }) }));
+  // сервер уже знает, что файл испорчен, — говорим прямо, не пытаясь играть
+  if (tr.bad) { reportTrack(tr, tr.bad); return; }
+  let blob;
+  try { blob = await fetchWhole(tr.url, token); }
+  catch (e) {
+    if (token !== loadToken || e.message === 'cancelled') return;
+    reportTrack(tr, e.status === 404 ? 'missing' : 'network');
     return;
   }
+  if (token !== loadToken) return;
+  if (blobUrl) URL.revokeObjectURL(blobUrl);
+  blobUrl = URL.createObjectURL(blob);
+  musicEl.src = blobUrl;
+  musicEl.load();
+  try { await waitCanPlay(musicEl, token); }
+  catch (e) { if (token === loadToken) reportTrack(tr, 'badformat'); return; }
+  if (token !== loadToken) return;
   buffer = { duration: musicEl.duration || 0 };
   setState('state.ready');
   ws.send(JSON.stringify({ type: 'ready', trackId }));
@@ -322,6 +352,7 @@ function startAt(startAtServer, offset) {
   } else go();
 }
 musicEl.addEventListener('ended', () => { playing = false; setState('state.ended'); });
+musicEl.addEventListener('waiting', () => { if (playing) stalls++; });
 musicEl.addEventListener('loadedmetadata', () => { if (buffer) buffer.duration = musicEl.duration || buffer.duration; });
 
 /* Задержка вывода у каждого устройства своя: выравнивать надо то, что слышно. */
@@ -333,34 +364,35 @@ function expectedPos() {
   return serverOffset + (now() - serverStartAt) / 1000 + outLatency();
 }
 
-/* Сверка с общим временем. Раньше после рывка плеер сразу проверял себя снова,
-   пока трек ещё догружался в новом месте, видел огромное расхождение, снова
-   прыгал — и так по кругу. Это и было «кваканье» у гостя: доля секунды звука,
-   полсекунды тишины. Теперь после прыжка есть пауза, пока звук не устоится,
-   а пока данные догружаются, ничего не правится. */
-let settleUntil = 0;
-musicEl.addEventListener('seeked', () => { settleUntil = performance.now() + 1500; });
-musicEl.addEventListener('playing', () => { settleUntil = Math.max(settleUntil, performance.now() + 1200); });
+/* Сверка с общим временем. Люди слушают в разных местах и слышат друг
+   друга с задержкой 50–150 мс, так что расхождение музыки до 80 мс никто
+   не заметит. Зато каждая смена скорости на андроиде даёт короткий провал
+   звука — поэтому правим редко: одна плавная правка темпа на 2% на нужное
+   время и возврат, а рывок — только при большом расхождении. */
+let settleUntil = 0, nudgeUntil = 0;
+musicEl.addEventListener('seeked', () => { settleUntil = performance.now() + 2000; });
+musicEl.addEventListener('playing', () => { settleUntil = Math.max(settleUntil, performance.now() + 1500); });
 setInterval(() => {
   if (!playing || !buffer || musicEl.paused || musicEl.seeking) return;
-  if (musicEl.readyState < 3) return;                 // ждём данные — не дёргаем
-  if (performance.now() < settleUntil) return;        // после прыжка даём устояться
+  if (musicEl.readyState < 3) return;
+  const t0 = performance.now();
+  if (t0 < settleUntil || t0 < nudgeUntil) return;
   pos = musicEl.currentTime;
-  const exp = expectedPos();
-  drift = pos - exp;
-  if (Math.abs(drift) > 0.6) {
+  drift = pos - expectedPos();
+  if (Math.abs(drift) > 0.4) {
     hardResyncs++;
     rate = 1; musicEl.playbackRate = 1;
-    settleUntil = performance.now() + 2500;
-    try { musicEl.currentTime = exp + 0.15; } catch (e) { }
-  } else if (Math.abs(drift) > 0.035) {
+    settleUntil = t0 + 4000;
+    try { musicEl.currentTime = expectedPos() + 0.1; } catch (e) { }
+  } else if (Math.abs(drift) > 0.08) {
     corrections++;
-    rate = Math.max(0.97, Math.min(1.03, 1 - drift * 0.5));
+    rate = drift > 0 ? 0.98 : 1.02;
     musicEl.playbackRate = rate;
-  } else if (Math.abs(drift) < 0.012 && rate !== 1) {
-    rate = 1; musicEl.playbackRate = 1;
+    const ms = Math.min(8000, Math.abs(drift) / 0.02 * 1000);
+    nudgeUntil = t0 + ms + 1000;
+    setTimeout(() => { rate = 1; musicEl.playbackRate = 1; }, ms);
   }
-}, 300);
+}, 500);
 
 /* полоса прокрутки и время */
 setInterval(() => {
@@ -382,7 +414,31 @@ const VOLUME_LOCKED = (() => {
   try { const a = document.createElement('audio'); a.volume = 0.5; return Math.abs(a.volume - 0.5) > 0.01; }
   catch (e) { return false; }
 })();
-let voiceNode = null;
+let voiceNode = null, remoteAn = null, voiceFallback = false, silentSince = 0, remoteLevel = 0, outLevel = 0, outAn = null;
+/* Самопроверка пути голоса. На части айфонов звук собеседника, пущенный через
+   Web Audio, приходит пустым — тогда ползунок «работает», а человека не слышно.
+   Собеседник сам сообщает, когда говорит; если в этот момент у нас тишина
+   дольше полутора секунд — переключаемся на обычный путь, где звук точно есть. */
+function lvl(an) {
+  const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a);
+  let s = 0; for (let i = 0; i < a.length; i++) { const v = (a[i] - 128) / 128; s += v * v; }
+  return Math.sqrt(s / a.length);
+}
+function fallbackVoice() {
+  if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } }
+  voiceNode = null; remoteAn = null; voiceFallback = true;
+  remoteAudio.muted = false;
+  playRemote();
+}
+setInterval(() => {
+  if (outAn) outLevel = lvl(outAn);
+  if (!voiceNode || !remoteAn) return;
+  remoteLevel = lvl(remoteAn);
+  if (peerSpeaking && remoteLevel < 0.004) {
+    if (!silentSince) silentSince = performance.now();
+    else if (performance.now() - silentSince > 1500) fallbackVoice();
+  } else silentSince = 0;
+}, 200);
 /* Айфон не даёт звучать входящему голосу без касания пользователя.
    Поэтому пробуем сразу, а если отказали — повторяем при первом же касании. */
 let remoteBlocked = false;
@@ -408,7 +464,18 @@ function enqueueSignal(m) {
   signalChain = signalChain.then(() => onSignal(m)).catch(e => console.warn('сигнал', e));
   return signalChain;
 }
-let micOn = true, headphones = false;
+let micOn = true, headphones = false, micError = null, selfLevel = 0;
+/* Беззвучная дорожка-заглушка. Если микрофон не дали, соединение всё равно
+   строится с ней, а когда доступ появится — она просто заменяется настоящей,
+   без перезвона. Раньше без микрофона соединение собиралось кривым. */
+function silentTrack() {
+  try {
+    const dst = actx.createMediaStreamDestination();
+    const osc = actx.createOscillator(), g = actx.createGain();
+    g.gain.value = 0; osc.connect(g).connect(dst); osc.start();
+    return dst.stream.getAudioTracks()[0];
+  } catch (e) { return null; }
+}
 let selfSpeaking = false, peerSpeaking = false;
 let stats = { rtt: 0, loss: 0, jitter: 0 };
 
@@ -425,11 +492,16 @@ async function getMic() {
     }, video: false
   };
   const s = await navigator.mediaDevices.getUserMedia(constraints);
-  if (localStream && pc) {
+  micError = null;
+  const track = s.getAudioTracks()[0];
+  if (!track) throw Object.assign(new Error('no audio track'), { name: 'NoTrack' });
+  track.enabled = micOn;
+  if (pc) {
+    // дорожка в соединении уже есть (настоящая или беззвучная заглушка) — меняем её
     const sender = pc.getSenders().find(x => x.track && x.track.kind === 'audio');
-    if (sender) await sender.replaceTrack(s.getAudioTracks()[0]);
-    localStream.getTracks().forEach(t => t.stop());
+    if (sender) await sender.replaceTrack(track);
   }
+  if (localStream) localStream.getTracks().forEach(t => t.stop());
   localStream = s;
   watchLevel(s);
   return s;
@@ -456,7 +528,8 @@ function makePeer() {
   pc = new RTCPeerConnection({ iceServers: cfg.iceServers, bundlePolicy: 'max-bundle' });
   gotRemote = false; stalled = 0; pendingCandidates = []; iceSent = iceGot = iceDropped = 0;
 
-  localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+  const myTrack = localStream ? localStream.getAudioTracks()[0] : silentTrack();
+  if (myTrack) pc.addTrack(myTrack, localStream || new MediaStream([myTrack]));
 
   pc.ontrack = e => {
     gotRemote = true;
@@ -465,12 +538,14 @@ function makePeer() {
     /* Голос идёт через собственный регулятор громкости на всех устройствах:
        громкость звукового элемента на айфоне заблокирована, а на части
        андроидов Chrome тоже её не слушает, если внутри звонок. */
-    if (actx && voiceGain && (!voiceNode || voiceNode.mediaStream !== stream)) {
+    if (!voiceFallback && actx && voiceGain && (!voiceNode || voiceNode.mediaStream !== stream)) {
       if (voiceNode) { try { voiceNode.disconnect(); } catch (err) { } }
       try {
         voiceNode = actx.createMediaStreamSource(stream);
         voiceNode.connect(voiceGain);
-      } catch (err) { voiceNode = null; }
+        remoteAn = actx.createAnalyser(); remoteAn.fftSize = 512;
+        voiceNode.connect(remoteAn);
+      } catch (err) { voiceNode = null; remoteAn = null; }
     }
     remoteAudio.volume = +ui.voice.value / 100;
     playRemote();
@@ -572,6 +647,7 @@ function watchLevel(stream) {
     let sum = 0;
     for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v; }
     const rms = Math.sqrt(sum / data.length);
+    selfLevel = rms;
     const loud = micOn && rms > 0.045;
     if (loud) { above++; below = 0; } else { below++; above = 0; }
     if (above === 2 && !selfSpeaking) setSelfSpeaking(true);
@@ -644,11 +720,12 @@ function connect() {
         if (pc) { pc.close(); pc = null; }
         remoteAudio.srcObject = null;
         if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } voiceNode = null; }
+        remoteAn = null; voiceFallback = false; silentSince = 0;
         queuedSignals = []; otherId = null; gotRemote = false;
         peerSpeaking = false; applyDuck();
         break;
 
-      case 'note': addChat({ from: '', text: m.text, sys: true }); break;
+      case 'note': addChat({ from: m.from || '', id: m.id, text: m.text, sys: true }); break;
 
       case 'style':
         roomStyle = m.style;
@@ -703,6 +780,11 @@ function renderTracks() {
     html += '<div class="gh">' + name + '</div>';
     byGroup[g].forEach(x => {
       const cur = currentTrack && x.id === currentTrack.id ? ' aria-current="true"' : '';
+      if (x.bad) {
+        html += '<div class="mi broken" title="' + t('bad.' + x.bad, { title: x.title }) + '">' + x.title +
+          '<small>' + t('badshort.' + x.bad) + '</small></div>';
+        return;
+      }
       html += '<button class="mi" data-track="' + encodeURIComponent(x.id) + '"' + cur + '>' + x.title + '</button>';
     });
   });
@@ -761,13 +843,25 @@ function renderRole(peers) {
 
 function addChat(msg) {
   const d = document.createElement('div');
-  const mine = msg.from === (localStorage.getItem('pyr-name') || '');
-  d.className = 'bub ' + (msg.sys ? 'sys' : mine ? 'me' : 'them');
-  d.textContent = msg.sys ? msg.text : msg.text;
-  // прокручиваем вниз, только если человек и так смотрел на последние
+  // своё сообщение узнаём по номеру участника, а не по имени: имена могут совпасть
+  const mine = msg.id ? msg.id === selfId : msg.from === (localStorage.getItem('pyr-name') || '');
+  if (msg.sys) {
+    d.className = 'bub sys';
+    d.textContent = (msg.from ? msg.from + ': ' : '') + msg.text;
+  } else {
+    d.className = 'bub ' + (mine ? 'me' : 'them');
+    if (!mine && msg.from) {
+      const n = document.createElement('span');
+      n.className = 'who'; n.textContent = msg.from;
+      d.appendChild(n);
+    }
+    const tx = document.createElement('span');
+    tx.textContent = msg.text;
+    d.appendChild(tx);
+  }
   const atBottom = ui.chat.scrollHeight - ui.chat.scrollTop - ui.chat.clientHeight < 30;
   ui.chat.appendChild(d);
-  if (atBottom || msg.from === (localStorage.getItem('pyr-name') || '')) ui.chat.scrollTop = ui.chat.scrollHeight;
+  if (atBottom || mine) ui.chat.scrollTop = ui.chat.scrollHeight;
 }
 
 let toastT;
@@ -836,8 +930,11 @@ ui.voice.oninput = () => {
   $('#voiceVal').textContent = ui.voice.value;
 };
 
-function setMic(on) {
-  if (micOn === on) return;
+async function setMic(on) {
+  if (on && (!localStream || micError)) {
+    try { await getMic(); } catch (e) { micError = (e && e.name) || 'error'; toast(t('toast.micdenied')); return; }
+  }
+  if (micOn === on && !micError) { $('#micOn').classList.toggle('on', micOn); $('#micOff').classList.toggle('on', !micOn); return; }
   micOn = on;
   if (localStream) localStream.getAudioTracks().forEach(x => (x.enabled = micOn));
   $('#micOn').classList.toggle('on', micOn);
@@ -1010,8 +1107,9 @@ setInterval(async () => {
     [t('diag.stream'), !pc ? '—' : (gotRemote ? (remoteAudio.paused ? t('diag.streamsilent') : t('diag.streamplays')) : t('diag.streamnone'))],
     [t('diag.me'), pc ? (isInitiator ? t('diag.calling') : t('diag.answering')) : '—'],
     [t('diag.aec'), headphones ? t('diag.aecoff') : t('diag.aecon')],
-    [t('diag.musicstate'), !buffer ? '—' : musicBlocked ? t('diag.m_blocked') : (musicEl.paused ? t('diag.m_paused') : t('diag.m_playing')) + (actx ? ', ' + actx.state : '')],
-    [t('diag.voicepath'), !gotRemote ? '—' : voiceNode ? t('diag.vp_gain') : t('diag.vp_el')],
+    [t('diag.mymic'), micError ? t('diag.mic_denied') : !localStream ? '—' : !micOn ? t('diag.mic_off') : t('diag.mic_level') + ' ' + Math.round(selfLevel * 300) + '%'],
+    [t('diag.musicstate'), !buffer ? '—' : musicBlocked ? t('diag.m_blocked') : (musicEl.paused ? t('diag.m_paused') : t('diag.m_playing')) + ', ' + t('diag.stalls') + ' ' + stalls],
+    [t('diag.voicepath'), !gotRemote ? '—' : voiceNode ? t('diag.vp_gain') + ': ' + t('diag.vp_in') + ' ' + Math.round(remoteLevel * 300) + '%, ' + t('diag.vp_out') + ' ' + Math.round(outLevel * 300) + '%' : t('diag.vp_el')],
     [t('diag.level'), Math.round(lastLevel * 100) + '%' + (window.Scene.supported() ? ', ' + window.Scene.fps() + ' fps' : '')]
   ];
   ui.diag.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
@@ -1207,6 +1305,7 @@ async function unlock() {
     await actx.resume();
     await getMic();
   } catch (e) {
+    micError = (e && e.name) || 'error';
     toast(t('gate.nomic'));
   }
   attachAnalyser();
@@ -1245,3 +1344,15 @@ loadWeather();
 if (!invitedDirectly) $('#gate').classList.add('gone');
 setInterval(renderToday, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) renderToday(); });
+
+/* Окошко для самопроверки: только чтение состояния и отправка команды.
+   Им пользуется автоматический тест, на работу приложения не влияет. */
+window.__pyr = {
+  state: () => ({
+    voiceGain: voiceGain ? voiceGain.gain.value : null,
+    voiceFallback, selfId, micOn, micError: micError || null
+  }),
+  send: m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); },
+  setPeerSpeaking: v => { peerSpeaking = v; },
+  setMic: on => setMic(on)
+};

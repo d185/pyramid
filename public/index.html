@@ -579,6 +579,16 @@ body:not(.in-room) .brand{font-size:22px;letter-spacing:.14em}
 /* поле ссылки на всю ширину пульта */
 #dropAdd .menu{left:auto;right:0;width:min(276px,calc(100vw - 28px))}
 .mi-url input{font-size:16px;padding:8px 10px}
+
+/* имя отправителя над чужим сообщением */
+.bub .who{display:block;font-size:10px;font-weight:600;letter-spacing:.02em;color:var(--gold-300);margin-bottom:2px}
+/* системные сообщения — оранжевым пузырём по центру */
+.bub.sys{align-self:center;max-width:92%;text-align:center;border-radius:12px;
+  background:linear-gradient(140deg,rgba(242,153,74,.92),rgba(214,108,40,.92));color:#2A1205;
+  font-size:11px;font-weight:500}
+/* испорченный файл в фонотеке */
+.ls-body .mi.broken{opacity:.55;cursor:not-allowed}
+.ls-body .mi.broken small{display:block;font-size:11px;color:#F0A27A;margin-top:2px}
 </style>
 </head>
 <body>

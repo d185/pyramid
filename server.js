@@ -74,13 +74,47 @@ const MIME = {
    Поэтому берём файл любой, а о неудаче честно сообщаем в комнату. */
 const AUDIO_RE = /\.(mp3|mpga|mp2|m4a|m4b|mp4|aac|adts|wav|wave|aif|aiff|aifc|caf|flac|ogg|oga|opus|weba|webm|amr|wma|alac|3gp)$/i;
 
-function serveFile(res, file) {
+/* Отдача файла с поддержкой кусков (HTTP Range).
+   Без неё Safari отказывается играть звук, а перемотка не может прыгнуть
+   в середину трека: плеер просит «байты с такого-то», а получал весь файл
+   с начала. Отсюда были ложные «нужен другой формат», остановка на +15
+   и заикание у гостя. */
+function serveFile(res, file, req) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) { res.writeHead(404); return res.end('нет такого файла'); }
+    const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+    const isMedia = /^audio\//.test(type);
+    const cache = isMedia ? 'public, max-age=86400' : 'no-cache';
+    const head = req && req.method === 'HEAD';
+    const range = req && req.headers.range;
+
+    if (range && isMedia) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+      let start, end;
+      if (m && m[1] === '' && m[2] !== '') {          // «последние N байт»
+        start = Math.max(0, st.size - parseInt(m[2], 10)); end = st.size - 1;
+      } else if (m) {
+        start = m[1] === '' ? 0 : parseInt(m[1], 10);
+        end = m[2] === '' ? st.size - 1 : Math.min(parseInt(m[2], 10), st.size - 1);
+      }
+      if (!m || isNaN(start) || isNaN(end) || start > end || start >= st.size) {
+        res.writeHead(416, { 'Content-Range': 'bytes */' + st.size });
+        return res.end();
+      }
+      res.writeHead(206, {
+        'Content-Type': type, 'Content-Length': end - start + 1,
+        'Content-Range': 'bytes ' + start + '-' + end + '/' + st.size,
+        'Accept-Ranges': 'bytes', 'Cache-Control': cache
+      });
+      if (head) return res.end();
+      return fs.createReadStream(file, { start, end }).pipe(res);
+    }
+
     res.writeHead(200, {
-      'Content-Type': MIME[path.extname(file).toLowerCase()] || 'application/octet-stream',
-      'Content-Length': st.size, 'Cache-Control': 'no-cache'
+      'Content-Type': type, 'Content-Length': st.size,
+      'Accept-Ranges': isMedia ? 'bytes' : 'none', 'Cache-Control': cache
     });
+    if (head) return res.end();
     fs.createReadStream(file).pipe(res);
   });
 }
@@ -166,11 +200,11 @@ const server = http.createServer((req, res) => {
     if (!parts.length) { res.writeHead(404); return res.end('нет файла'); }
     const base = parts[0] === 'track' || parts[0] === 'tracks'
       ? path.join(ROOT, parts.shift()) : path.join(ROOT, 'tracks');
-    return serveFile(res, path.join(base, ...parts));
+    return serveFile(res, path.join(base, ...parts), req);
   }
 
   const file = p === '/' ? path.join(PUBLIC, 'index.html') : path.join(PUBLIC, path.normalize(p).replace(/^(\.\.[/\\])+/, ''));
-  serveFile(res, file);
+  serveFile(res, file, req);
 });
 
 /* ---------- TURN: ретранслятор для звонков между разными сетями ----------

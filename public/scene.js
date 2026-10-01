@@ -298,13 +298,13 @@ window.Scene = (function () {
 
     var floorRT = bake(P, 1024);
     mats.floor = stone(floorRT.texture, 0xFFF6E6, { metalness: .3, roughness: .5 });
-    mats.floor.color = new THREE.Color(0.52, 0.52, 0.52);
+    mats.floor.color = new THREE.Color(0.44, 0.44, 0.44);
     mats.floor.envMapIntensity = .5;
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
     mats.floorRT = floorRT;
-    glint(-1.6, .9, 2.4, .10);
-    glint(2.1, -1.8, 1.8, .07);
+    glint(-1.6, .9, 2.4, .033);
+    glint(2.1, -1.8, 1.8, .024);
 
     lights.key = new THREE.PointLight(P.key, 15, 26, 2);
     lights.key.position.set(0, 8.4, 0); scene.add(lights.key);

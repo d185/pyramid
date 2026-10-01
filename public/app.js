@@ -271,10 +271,18 @@ async function loadTrack(trackId) {
     if (token !== loadToken) return;              // пока грузили, выбрали другой трек
   } catch (e) {
     if (token !== loadToken) return;
-    // настоящая ошибка формата: элемент сам сказал, что не умеет это играть
-    setState('state.badformat');
-    toast(t('toast.badformat'));
-    ws.send(JSON.stringify({ type: 'note', text: t('note.badformat', { title: tr.title }) }));
+    const code = musicEl.error && musicEl.error.code;
+    // 4 — элемент прямо сказал, что формат не поддерживает. Всё остальное —
+    // сеть или сервер, и это повод попробовать ещё раз, а не винить mp3.
+    if (code !== 4 && !tr._retried) {
+      tr._retried = true;
+      setTimeout(() => { if (token === loadToken) loadTrack(trackId); }, 1500);
+      return;
+    }
+    const key = code === 4 ? 'badformat' : 'loadfail';
+    setState('state.' + key);
+    toast(t('toast.' + key));
+    ws.send(JSON.stringify({ type: 'note', text: t('note.' + key, { title: tr.title }) }));
     return;
   }
   buffer = { duration: musicEl.duration || 0 };
@@ -299,6 +307,7 @@ function startAt(startAtServer, offset) {
     const exp = expectedPos();
     try { musicEl.currentTime = Math.max(0, exp); } catch (e) { }
     if (actx && actx.state !== 'running') actx.resume().catch(() => { });
+    settleUntil = performance.now() + 1500;
     playing = true;
     setState('state.playing');
     const p = musicEl.play();
@@ -324,24 +333,34 @@ function expectedPos() {
   return serverOffset + (now() - serverStartAt) / 1000 + outLatency();
 }
 
-/* каждые 250 мс: сверяемся с общим временем и правим темпом, а не рывком */
+/* Сверка с общим временем. Раньше после рывка плеер сразу проверял себя снова,
+   пока трек ещё догружался в новом месте, видел огромное расхождение, снова
+   прыгал — и так по кругу. Это и было «кваканье» у гостя: доля секунды звука,
+   полсекунды тишины. Теперь после прыжка есть пауза, пока звук не устоится,
+   а пока данные догружаются, ничего не правится. */
+let settleUntil = 0;
+musicEl.addEventListener('seeked', () => { settleUntil = performance.now() + 1500; });
+musicEl.addEventListener('playing', () => { settleUntil = Math.max(settleUntil, performance.now() + 1200); });
 setInterval(() => {
-  if (!playing || !buffer || musicEl.paused) return;
+  if (!playing || !buffer || musicEl.paused || musicEl.seeking) return;
+  if (musicEl.readyState < 3) return;                 // ждём данные — не дёргаем
+  if (performance.now() < settleUntil) return;        // после прыжка даём устояться
   pos = musicEl.currentTime;
   const exp = expectedPos();
   drift = pos - exp;
-  if (Math.abs(drift) > 0.3) {
+  if (Math.abs(drift) > 0.6) {
     hardResyncs++;
-    try { musicEl.currentTime = exp + 0.05; } catch (e) { }
     rate = 1; musicEl.playbackRate = 1;
-  } else if (Math.abs(drift) > 0.015) {
+    settleUntil = performance.now() + 2500;
+    try { musicEl.currentTime = exp + 0.15; } catch (e) { }
+  } else if (Math.abs(drift) > 0.035) {
     corrections++;
-    rate = Math.max(0.95, Math.min(1.05, 1 - drift * 0.6));
+    rate = Math.max(0.97, Math.min(1.03, 1 - drift * 0.5));
     musicEl.playbackRate = rate;
-  } else if (rate !== 1) {
+  } else if (Math.abs(drift) < 0.012 && rate !== 1) {
     rate = 1; musicEl.playbackRate = 1;
   }
-}, 250);
+}, 300);
 
 /* полоса прокрутки и время */
 setInterval(() => {

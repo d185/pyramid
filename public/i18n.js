@@ -11,6 +11,9 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'state.loadfail': 'did not load',
+    'toast.loadfail': 'The track did not load — check the connection',
+    'note.loadfail': 'could not load "{title}", the connection may be weak',
     'toast.tapmusic': 'Tap the screen to hear the music',
     'diag.musicstate': 'music',
     'diag.m_playing': 'playing',
@@ -185,6 +188,9 @@ window.I18N = {
   },
 
   ru: {
+    'state.loadfail': 'не загрузился',
+    'toast.loadfail': 'Трек не загрузился — проверьте связь',
+    'note.loadfail': 'не смог загрузить «{title}», возможно, слабая связь',
     'toast.tapmusic': 'Коснитесь экрана, чтобы зазвучала музыка',
     'diag.musicstate': 'музыка',
     'diag.m_playing': 'играет',
@@ -359,6 +365,9 @@ window.I18N = {
   },
 
   es: {
+    'state.loadfail': 'no cargó',
+    'toast.loadfail': 'La pista no cargó — revisa la conexión',
+    'note.loadfail': 'no pude cargar «{title}», quizá la conexión es débil',
     'toast.tapmusic': 'Toca la pantalla para oír la música',
     'diag.musicstate': 'música',
     'diag.m_playing': 'sonando',
@@ -533,6 +542,9 @@ window.I18N = {
   },
 
   fr: {
+    'state.loadfail': 'non chargé',
+    'toast.loadfail': 'Le morceau ne s’est pas chargé — vérifiez la connexion',
+    'note.loadfail': 'impossible de charger « {title} », la connexion est peut-être faible',
     'toast.tapmusic': 'Touchez l’écran pour entendre la musique',
     'diag.musicstate': 'musique',
     'diag.m_playing': 'joue',
@@ -707,6 +719,9 @@ window.I18N = {
   },
 
   de: {
+    'state.loadfail': 'nicht geladen',
+    'toast.loadfail': 'Der Titel lud nicht — Verbindung prüfen',
+    'note.loadfail': '„{title}“ ließ sich nicht laden, die Verbindung ist vielleicht schwach',
     'toast.tapmusic': 'Auf den Bildschirm tippen, um die Musik zu hören',
     'diag.musicstate': 'Musik',
     'diag.m_playing': 'läuft',

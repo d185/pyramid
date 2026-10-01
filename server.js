@@ -22,6 +22,36 @@ const TRACKS = path.join(ROOT, 'tracks');
 const TRACK_DIRS = [path.join(ROOT, 'tracks'), path.join(ROOT, 'track')];
 for (const d of TRACK_DIRS) if (!fs.existsSync(d)) { try { fs.mkdirSync(d, { recursive: true }); } catch (e) { } }
 
+/* Проверка содержимого: браузер сообщает «не тот формат» и тогда, когда
+   вместо звука получает что-то другое. Смотрим первые байты файла и
+   говорим прямо, что внутри. */
+const sniffCache = new Map();
+function sniff(file) {
+  let st;
+  try { st = fs.statSync(file); } catch (e) { return { bad: 'missing' }; }
+  const key = file + ':' + st.size + ':' + st.mtimeMs;
+  if (sniffCache.has(key)) return sniffCache.get(key);
+  let res = { size: st.size };
+  if (st.size === 0) res.bad = 'empty';
+  else {
+    const b = Buffer.alloc(Math.min(64, st.size));
+    try { const fd = fs.openSync(file, 'r'); fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd); } catch (e) { }
+    const txt = b.toString('latin1');
+    if (txt.startsWith('version https://git-lfs')) res.bad = 'lfs';
+    else if (/^\s*</.test(txt)) res.bad = 'html';
+    else if (txt.startsWith('ID3') || (b[0] === 0xFF && (b[1] & 0xE0) === 0xE0)) res.kind = 'mp3';
+    else if (txt.slice(4, 8) === 'ftyp') res.kind = 'm4a';
+    else if (txt.startsWith('RIFF')) res.kind = 'wav';
+    else if (txt.startsWith('OggS')) res.kind = 'ogg';
+    else if (txt.startsWith('fLaC')) res.kind = 'flac';
+    else if (txt.startsWith('FORM')) res.kind = 'aiff';
+    else res.bad = 'unknown';
+    if (!res.bad && st.size < 4096) res.bad = 'tiny';
+  }
+  sniffCache.set(key, res);
+  return res;
+}
+
 function listTracks() {
   const out = [];
   for (const base of TRACK_DIRS) {
@@ -33,18 +63,22 @@ function listTracks() {
       if (e.isDirectory()) {
         let files = [];
         try { files = fs.readdirSync(path.join(base, e.name)); } catch (err) { continue; }
-        files.filter(f => AUDIO_RE.test(f)).forEach(f => out.push({
-          id: rel + '/' + e.name + '/' + f,
-          title: f.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
-          url: '/tracks/' + encodeURIComponent(rel) + '/' + encodeURIComponent(e.name) + '/' + encodeURIComponent(f),
-          group: e.name
-        }));
+        files.filter(f => AUDIO_RE.test(f)).forEach(f => {
+          const info = sniff(path.join(base, e.name, f));
+          out.push({
+            id: rel + '/' + e.name + '/' + f,
+            title: f.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' '),
+            url: '/tracks/' + encodeURIComponent(rel) + '/' + encodeURIComponent(e.name) + '/' + encodeURIComponent(f),
+            group: e.name, size: info.size || 0, bad: info.bad || null
+          });
+        });
       } else if (AUDIO_RE.test(e.name)) {
+        const info = sniff(path.join(base, e.name));
         out.push({
           id: rel + '/' + e.name,
           title: e.name.replace(/^[a-z0-9]{7,12}-/, '').replace(/\.[^.]+$/, ''),
           url: '/tracks/' + encodeURIComponent(rel) + '/' + encodeURIComponent(e.name),
-          group: 'upload'
+          group: 'upload', size: info.size || 0, bad: info.bad || null
         });
       }
     }
@@ -408,12 +442,12 @@ wss.on('connection', ws => {
 
       case 'note': {
         const who = room.peers.get(selfId)?.name || '?';
-        broadcast(room, { type: 'note', text: who + ': ' + String(m.text || '').slice(0, 200) });
+        broadcast(room, { type: 'note', from: who, id: selfId, text: String(m.text || '').slice(0, 200) });
         break;
       }
 
       case 'chat': {
-        const msg = { from: room.peers.get(selfId)?.name || '?', text: String(m.text || '').slice(0, 500), at: Date.now() };
+        const msg = { from: room.peers.get(selfId)?.name || '?', id: selfId, text: String(m.text || '').slice(0, 500), at: Date.now() };
         room.chat.push(msg); if (room.chat.length > 200) room.chat.shift();
         broadcast(room, { type: 'chat', msg });
         break;
@@ -450,6 +484,8 @@ process.on('SIGTERM', () => {
 
 server.listen(PORT, () => {
   console.log('Pyramid слушает http://localhost:' + PORT);
+  const broken = listTracks().filter(t => t.bad);
+  if (broken.length) console.log('ФАЙЛЫ НЕ ЯВЛЯЮТСЯ ЗВУКОМ:', broken.map(t => t.id + ' (' + t.bad + ')').join(', '));
   if (process.env.ICE_SERVERS && !parseIceText(process.env.ICE_SERVERS))
     console.log('ICE_SERVERS задан, но не разобрался — проверьте, что скопирован весь массив');
   if (!process.env.TURN_URL && !process.env.METERED_KEY && !process.env.METERED_URL && !parseIceText(process.env.ICE_SERVERS))

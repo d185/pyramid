@@ -11,6 +11,9 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'diag.chunk': 'chunk',
+    'diag.vp_wait': 'phone default — switches to own control once they speak',
+    'diag.vp_net': 'arriving',
     'bad.lfs': '"{title}" is a Git LFS pointer, not the audio itself: the real file never reached the server',
     'bad.html': '"{title}" is a web page saved as .mp3, not audio',
     'bad.empty': '"{title}" is empty — 0 bytes',
@@ -210,6 +213,9 @@ window.I18N = {
   },
 
   ru: {
+    'diag.chunk': 'кусок',
+    'diag.vp_wait': 'регулятор телефона — перейдёт на свой, как только собеседник заговорит',
+    'diag.vp_net': 'по сети',
     'bad.lfs': '«{title}» — это указатель Git LFS, а не сам звук: настоящий файл до сервера не дошёл',
     'bad.html': '«{title}» — веб-страница, сохранённая как .mp3, а не звук',
     'bad.empty': '«{title}» пустой — 0 байт',
@@ -409,6 +415,9 @@ window.I18N = {
   },
 
   es: {
+    'diag.chunk': 'fragmento',
+    'diag.vp_wait': 'del teléfono — pasa al propio cuando la otra persona hable',
+    'diag.vp_net': 'llega',
     'bad.lfs': '«{title}» es un puntero de Git LFS, no el audio: el archivo real no llegó al servidor',
     'bad.html': '«{title}» es una página web guardada como .mp3',
     'bad.empty': '«{title}» está vacío',
@@ -608,6 +617,9 @@ window.I18N = {
   },
 
   fr: {
+    'diag.chunk': 'morceau',
+    'diag.vp_wait': 'réglage du téléphone — passe au réglage propre dès que l’autre parle',
+    'diag.vp_net': 'arrive',
     'bad.lfs': '« {title} » est un pointeur Git LFS, pas le son : le vrai fichier n’est pas arrivé',
     'bad.html': '« {title} » est une page web enregistrée en .mp3',
     'bad.empty': '« {title} » est vide',
@@ -807,6 +819,9 @@ window.I18N = {
   },
 
   de: {
+    'diag.chunk': 'Stück',
+    'diag.vp_wait': 'Telefonregler — wechselt zum eigenen, sobald die andere Person spricht',
+    'diag.vp_net': 'kommt an',
     'bad.lfs': '„{title}“ ist ein Git-LFS-Verweis, nicht der Ton: die echte Datei kam nie an',
     'bad.html': '„{title}“ ist eine als .mp3 gespeicherte Webseite',
     'bad.empty': '„{title}“ ist leer',

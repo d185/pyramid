@@ -26,7 +26,7 @@ window.Scene = (function () {
   var MARBLE = {
     green: {
       ramp: ['#000704', '#010F09', '#032015', '#063422', '#0A4B33', '#116548', '#2C8A66'],
-      vein: '#C9992F', veinHot: '#FFF3CE', speck: '#3A2410', amount: 2.2, seed: 0.0,
+      vein: '#C9992F', veinHot: '#FFF3CE', speck: '#3A2410', amount: 2.2, seed: 0.0, floorK: 1.39, 
       fog: 0x02110A, bg: 0x010A06, ambient: 0x1A7350, amb: .5,
       key: 0xFFE6A8, accent: 0x7CF0C4, rim: 0x2FBF8E, warm: 0xE0A84A,
       veinColor: 0xE9C86E, shaft: 'rgba(255,236,180,', env: ['#F6E7B8', '#3E7A5E', '#02100A'],
@@ -34,7 +34,7 @@ window.Scene = (function () {
     },
     gold: {
       ramp: ['#0E0800', '#231603', '#3E2A06', '#61430C', '#8A6317', '#B98A28', '#E0B85A'],
-      vein: '#FFD98A', veinHot: '#FFF8DC', speck: '#4A2A0C', amount: 2.0, seed: 11.3,
+      vein: '#FFD98A', veinHot: '#FFF8DC', speck: '#4A2A0C', amount: 2.0, seed: 11.3, floorK: 0.94, 
       fog: 0x2A1B04, bg: 0x160D02, ambient: 0xC8913A, amb: .5,
       key: 0xFFF0C8, accent: 0xFFD98A, rim: 0xD8A340, warm: 0xFFE9B0,
       veinColor: 0xFFD98A, shaft: 'rgba(255,240,200,', env: ['#FFF6D8', '#C9992F', '#2A1B04'],
@@ -42,7 +42,7 @@ window.Scene = (function () {
     },
     silver: {
       ramp: ['#050607', '#0C0F10', '#191E21', '#2A3134', '#3E474C', '#59646A', '#7D888F'],
-      vein: '#C9D8DF', veinHot: '#FFFFFF', speck: '#3A2A1E', amount: 1.25, seed: 23.7,
+      vein: '#C9D8DF', veinHot: '#FFFFFF', speck: '#3A2A1E', amount: 1.25, seed: 23.7, floorK: 0.99, 
       fog: 0x121618, bg: 0x080A0B, ambient: 0x7E97A3, amb: .46,
       key: 0xDCEAF2, accent: 0xBFD8E2, rim: 0x6E8A99, warm: 0xA8BCC6,
       veinColor: 0xCFE2EA, shaft: 'rgba(224,240,248,', env: ['#EAF4FA', '#5E727C', '#0A0C0D'],
@@ -50,7 +50,7 @@ window.Scene = (function () {
     },
     blue: {
       ramp: ['#02030D', '#05081A', '#0A0F2B', '#11183D', '#1A2352', '#263168', '#3B4885'],
-      vein: '#D8DEFA', veinHot: '#FFFFFF', speck: '#2A2238', amount: 1.3, seed: 41.2,
+      vein: '#D8DEFA', veinHot: '#FFFFFF', speck: '#2A2238', amount: 1.3, seed: 41.2, floorK: 0.70, 
       fog: 0x05081A, bg: 0x02030D, ambient: 0x3A4A8C, amb: .46,
       key: 0xE8F1FF, accent: 0x7FA8F0, rim: 0x1F44A0, warm: 0x5E86D0,
       veinColor: 0xE2ECFA, shaft: 'rgba(226,238,255,', env: ['#EAF2FF', '#3E63A8', '#04070F'],
@@ -58,7 +58,7 @@ window.Scene = (function () {
     },
     violet: {
       ramp: ['#0C0512', '#170A22', '#241235', '#351C4C', '#4A2966', '#623A84', '#8458A8'],
-      vein: '#F2C9B8', veinHot: '#FFF1EA', speck: '#3A2226', amount: 1.35, seed: 57.9,
+      vein: '#F2C9B8', veinHot: '#FFF1EA', speck: '#3A2226', amount: 1.35, seed: 57.9, floorK: 1.71, 
       fog: 0x170A22, bg: 0x0C0512, ambient: 0x7A5A98, amb: .48,
       key: 0xEFE2FA, accent: 0xB9A2D4, rim: 0x6A5086, warm: 0xA88CC4,
       veinColor: 0xF6ECFF, shaft: 'rgba(250,244,255,', env: ['#FDF8FF', '#9C8AB0', '#140E1C'],
@@ -274,6 +274,22 @@ window.Scene = (function () {
     m.position.y = y; scene.add(m); mats.shaft = m.material;
   }
 
+  /* Пол не зависит от ламп. Замер показал: две лампы над центром светят на него
+     так сильно, что картинка упирается в предел яркости, а под скользящим углом
+     он ещё и отражает их, как мокрый асфальт. Стенам эти лампы нужны, полу нет. */
+  function floorMat(tex, k) {
+    var m = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(k, k, k) });
+    m.userData.glow = { value: 0.1 };
+    m.onBeforeCompile = function (sh) {
+      sh.uniforms.uGlow = m.userData.glow;
+      sh.fragmentShader = 'uniform float uGlow;\n' + sh.fragmentShader
+        .replace('#include <map_fragment>', '#include <map_fragment>\n  diffuseColor.a = 1.0;')
+        .replace('vec3 outgoingLight = reflectedLight.indirectDiffuse;',
+          'vec3 outgoingLight = reflectedLight.indirectDiffuse;\n  outgoingLight += vec3(1.0, 0.965, 0.9) * texture2D(map, vUv).a * uGlow;');
+    };
+    return m;
+  }
+
   /* мягкий блик на полу: тёплое пятно света, лежащее на камне */
   function glint(x, z, r, opacity) {
     var c = document.createElement('canvas'); c.width = c.height = 128;
@@ -297,14 +313,12 @@ window.Scene = (function () {
     mats.wallRT = wallRT;
 
     var floorRT = bake(P, 1024);
-    mats.floor = stone(floorRT.texture, 0xFFF6E6, { metalness: 0, roughness: .78 });
-    mats.floor.color = new THREE.Color(0.62, 0.62, 0.62);
-    mats.floor.envMapIntensity = 0.04;
+    mats.floor = floorMat(floorRT.texture, P.floorK || 1);
     var floor = new THREE.Mesh(new THREE.CircleGeometry(14, 64), mats.floor);
     floor.rotation.x = -Math.PI / 2; scene.add(floor);
     mats.floorRT = floorRT;
-    glint(-1.6, .9, 2.4, .033);
-    glint(2.1, -1.8, 1.8, .024);
+    glint(-1.6, .9, 2.4, .07);
+    glint(2.1, -1.8, 1.8, .05);
 
     lights.key = new THREE.PointLight(P.key, 15, 26, 2);
     lights.key.position.set(0, 8.4, 0); scene.add(lights.key);
@@ -319,9 +333,14 @@ window.Scene = (function () {
     camera.position.set(0, 1.75, 4.6);
   }
 
-  function loop() {
+  /* Не больше 60 кадров в секунду: айфон с частотой 120 тратил вдвое больше сил
+     на картинку, и их не хватало звуку. */
+  var lastFrame = 0;
+  function loop(now) {
     raf = requestAnimationFrame(loop);
     if (document.hidden) return;
+    if (now && now - lastFrame < 15.5) return;
+    lastFrame = now || 0;
     var dt = Math.min(clock.getDelta(), .05), t = clock.getElapsedTime();
     level += (target - level) * Math.min(1, dt * 9);
     var L = level;
@@ -413,7 +432,8 @@ window.Scene = (function () {
       var P = MARBLE[kind];
       try { renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); }
       catch (e) { return false; }
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.5 : 2));
       renderer.outputEncoding = THREE.sRGBEncoding;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
@@ -452,7 +472,7 @@ window.Scene = (function () {
       mats.wall.emissive = new THREE.Color(0xFFF6E6);
       mats.wall.needsUpdate = true;
       mats.floor.map = floorRT.texture;
-      mats.floor.emissive = new THREE.Color(0xFFF6E6);
+      mats.floor.color.setScalar(P.floorK || 1);
       mats.floor.needsUpdate = true;
       scene.background = new THREE.Color(P.bg);
       scene.fog.color = new THREE.Color(P.fog);
@@ -471,6 +491,7 @@ window.Scene = (function () {
     fps: function () { return fps; },
     kind: function () { return kind; },
     stats: function () { return { lost: lost, builds: builds }; },
+    _debug: function () { return { scene: scene, mats: mats, lights: lights, renderer: renderer }; },
     dispose: function () {
       if (raf) cancelAnimationFrame(raf);
       raf = null;

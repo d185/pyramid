@@ -11,6 +11,9 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'toast.noaudio': 'The sound engine could not start — reload the page',
+    'toast.no3d': 'The 3D room did not start; sound still works',
+    'diag.errors': 'last errors',
     'diag.chunk': 'chunk',
     'diag.vp_wait': 'phone default — switches to own control once they speak',
     'diag.vp_net': 'arriving',
@@ -213,6 +216,9 @@ window.I18N = {
   },
 
   ru: {
+    'toast.noaudio': 'Звуковой движок не запустился — перезагрузите страницу',
+    'toast.no3d': 'Трёхмерная комната не поднялась; звук работает',
+    'diag.errors': 'последние ошибки',
     'diag.chunk': 'кусок',
     'diag.vp_wait': 'регулятор телефона — перейдёт на свой, как только собеседник заговорит',
     'diag.vp_net': 'по сети',
@@ -415,6 +421,9 @@ window.I18N = {
   },
 
   es: {
+    'toast.noaudio': 'El motor de sonido no arrancó — recarga la página',
+    'toast.no3d': 'La sala 3D no arrancó; el sonido funciona',
+    'diag.errors': 'últimos errores',
     'diag.chunk': 'fragmento',
     'diag.vp_wait': 'del teléfono — pasa al propio cuando la otra persona hable',
     'diag.vp_net': 'llega',
@@ -617,6 +626,9 @@ window.I18N = {
   },
 
   fr: {
+    'toast.noaudio': 'Le moteur audio n’a pas démarré — rechargez la page',
+    'toast.no3d': 'La salle 3D n’a pas démarré ; le son fonctionne',
+    'diag.errors': 'dernières erreurs',
     'diag.chunk': 'morceau',
     'diag.vp_wait': 'réglage du téléphone — passe au réglage propre dès que l’autre parle',
     'diag.vp_net': 'arrive',
@@ -819,6 +831,9 @@ window.I18N = {
   },
 
   de: {
+    'toast.noaudio': 'Die Audio-Engine startete nicht — Seite neu laden',
+    'toast.no3d': 'Der 3D-Raum startete nicht; der Ton läuft',
+    'diag.errors': 'letzte Fehler',
     'diag.chunk': 'Stück',
     'diag.vp_wait': 'Telefonregler — wechselt zum eigenen, sobald die andere Person spricht',
     'diag.vp_net': 'kommt an',

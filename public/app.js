@@ -13,12 +13,22 @@ const $ = s => document.querySelector(s);
 
 /* Одна невидимая ошибка однажды убила половину приложения.
    Теперь любая всплывает на экран, а не прячется в журнале. */
-window.addEventListener('error', e => {
+const errLog = [];
+function noteError(msg) {
+  msg = String(msg || 'ошибка').slice(0, 160);
+  if (errLog[errLog.length - 1] !== msg) errLog.push(msg);
+  if (errLog.length > 5) errLog.shift();
   const box = document.querySelector('#toast');
   if (!box) return;
-  box.textContent = '⚠ ' + (e.message || 'ошибка');
+  box.textContent = '⚠ ' + msg;
   box.classList.add('on');
   setTimeout(() => box.classList.remove('on'), 6000);
+}
+window.addEventListener('error', e => noteError(e.message));
+// ошибки в асинхронном коде (загрузка трека, расшифровка) раньше терялись
+window.addEventListener('unhandledrejection', e => {
+  const r = e.reason;
+  noteError(r && r.message ? r.message : (typeof r === 'string' ? r : 'async: ' + (r && r.name || 'ошибка')));
 });
 const fmt = s => (s < 0 ? '0:00' : Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'));
 
@@ -189,6 +199,7 @@ let actx = null, musicGain = null, duckGain = null, voiceGain = null, actxAfterM
 let vctx = null, vctxAfterMic = false;
 function ensureVoiceCtx(force) {
   if (vctx && !force) return;
+  if (vctx && vctx !== actx) { try { vctx.close(); } catch (e) { } }   // лишние движки закрываем: айфон даёт их мало
   if (actx && actxAfterMic) vctx = actx;
   else { try { vctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { vctx = actx; } }
   if (!vctx) return;
@@ -199,7 +210,8 @@ function ensureVoiceCtx(force) {
   outAn = vctx.createAnalyser(); outAn.fftSize = 512;
   voiceGain.connect(outAn);
   if (vctx.state !== 'running') { try { vctx.resume().catch(() => { }); } catch (e) { } }
-  if (remoteStream) { voiceRoute = 'element'; remoteAudio.muted = false; probeVoice(remoteStream); }
+  voiceNode = null; remoteAn = null;
+  if (remoteStream && connectedNow()) probeVoice(remoteStream);
 }
 /* ---------- музыка: расшифровка по кускам и игра буферами ----------
    Раньше музыка шла через звуковой элемент, пропущенный в движок способом
@@ -225,15 +237,33 @@ function retryMusic() {
 }
 ['touchend', 'click', 'keydown'].forEach(ev => document.addEventListener(ev, retryMusic, { passive: true }));
 
+let keepAlive = null;
+function silenceStream(ctx) {
+  const osc = ctx.createOscillator(), dst = ctx.createMediaStreamDestination();
+  osc.connect(dst); osc.start();
+  const tr = dst.stream.getAudioTracks()[0];
+  if (tr) tr.enabled = false;
+  return dst.stream;
+}
 function initAudio() {
   if (actx) return;
-  actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'playback' });
+  try {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+  } catch (e) { noteError(t('toast.noaudio')); return; }
   musicGain = actx.createGain();
   duckGain = actx.createGain();
   musicGain.gain.value = +ui.music.value / 100;
   duckGain.gain.value = 1;
   musicGain.connect(duckGain).connect(actx.destination);
   actxAfterMic = !!localStream;
+  /* Как у веб-Телеграма: звуковой элемент всё время играет беззвучный поток —
+     так звук страницы остаётся «разогретым» и не засыпает между касаниями. */
+  try {
+    keepAlive = new Audio();
+    keepAlive.setAttribute('playsinline', 'true');
+    keepAlive.srcObject = silenceStream(actx);
+    const p = keepAlive.play(); if (p && p.catch) p.catch(() => { });
+  } catch (e) { }
 }
 
 function decodeAB(ab) {
@@ -256,7 +286,16 @@ async function getChunk(k) {
   const c = T.plan[k];
   if (!c) return null;
   const p = (async () => {
-    const ab = await decodeAB(MP3Chunker.slice(T.parsed, c.from, c.to).buffer);
+    let ab;
+    try { ab = await decodeAB(MP3Chunker.slice(T.parsed, c.from, c.to).buffer); }
+    catch (e1) {
+      // некоторые расшифровщики не принимают кусок без начала файла — подклеиваем первые кадры
+      if (k === 0) throw e1;
+      const head = MP3Chunker.slice(T.parsed, 0, 2), body = MP3Chunker.slice(T.parsed, c.from, c.to);
+      const both = new Uint8Array(head.length + body.length); both.set(head, 0); both.set(body, head.length);
+      ab = await decodeAB(both.buffer);
+      T.headed = true;
+    }
     let start;
     if (k === 0) start = 0;
     else {
@@ -491,21 +530,30 @@ function lvl(an) {
   return Math.sqrt(s / a.length);
 }
 function connectedNow() { return !!pc && (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed'); }
+/* Схема веб-Телеграма для голоса собеседника: поток → звуковой движок →
+   регулятор громкости → динамик. Поток при этом подключён к НЕМОМУ звуковому
+   элементу: без этого Chrome не отдаёт звук в движок. Подключаем только после
+   установки соединения — раньше узел выдаёт тишину. Запасной путь: если движок
+   молчит, а по сведениям соединения голос идёт, — включаем звук элемента. */
+function lvl(an) {
+  const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a);
+  let s = 0; for (let i = 0; i < a.length; i++) { const v = (a[i] - 128) / 128; s += v * v; }
+  return Math.sqrt(s / a.length);
+}
 function probeVoice(stream) {
   if (!vctx) ensureVoiceCtx();
-  if (!vctx || voiceFallback) return;
+  if (!vctx || !voiceGain || voiceFallback) return;
+  if (voiceNode && voiceNode.mediaStream === stream) return;
   try {
     if (voiceNode) voiceNode.disconnect();
     voiceNode = vctx.createMediaStreamSource(stream);
     remoteAn = vctx.createAnalyser(); remoteAn.fftSize = 512;
-    voiceNode.connect(remoteAn);               // пока только замер, в динамик не идёт
-  } catch (e) { voiceNode = null; remoteAn = null; }
-}
-function useGainRoute() {
-  if (!voiceNode || voiceRoute === 'gain') return;
-  voiceNode.connect(voiceGain);
-  voiceRoute = 'gain';
-  remoteAudio.muted = true;
+    voiceNode.connect(remoteAn);
+    voiceNode.connect(voiceGain);          // главный путь — сразу, как у Телеграма
+    voiceRoute = 'gain';
+    remoteAudio.muted = true;              // элемент только «потребляет» поток
+    if (vctx.state !== 'running') vctx.resume().catch(() => { });
+  } catch (e) { voiceNode = null; remoteAn = null; voiceRoute = 'element'; remoteAudio.muted = false; }
 }
 function useElementRoute(stuck) {
   if (voiceNode && voiceRoute === 'gain') { try { voiceNode.disconnect(voiceGain); } catch (e) { } }
@@ -518,11 +566,11 @@ setInterval(() => {
   if (outAn) outLevel = lvl(outAn);
   if (!remoteAn) return;
   remoteLevel = lvl(remoteAn);
-  if (voiceRoute === 'element' && !voiceFallback && remoteLevel > 0.002) useGainRoute();
   if (voiceRoute === 'gain') {
-    if (statsRemote > 0.02 && remoteLevel < 0.001) {
+    const theySpeak = statsRemote > 0.02 || peerSpeaking;
+    if (theySpeak && remoteLevel < 0.001) {
       if (!deafSince) deafSince = performance.now();
-      else if (performance.now() - deafSince > 1500) useElementRoute(true);
+      else if (performance.now() - deafSince > 2000) useElementRoute(true);
     } else deafSince = 0;
   }
 }, 200);
@@ -808,7 +856,7 @@ function connect() {
         if (m.state.style && m.state.style !== roomStyle) {
           roomStyle = m.state.style;
           if (document.body.classList.contains('in-room') && window.Scene.supported())
-            if (!window.Scene.restyle(roomStyle)) window.Scene.enter(roomStyle, $('#gl'));
+            if (!window.Scene.restyle(roomStyle)) { try { window.Scene.enter(roomStyle, $('#gl')); } catch (e) { noteError('3D: ' + e.message); } }
         }
         renderTracks(); renderRole(m.peers);
         m.chat.forEach(addChat);
@@ -842,7 +890,7 @@ function connect() {
       case 'style':
         roomStyle = m.style;
         if (window.Scene.supported() && !window.Scene.restyle(roomStyle))
-          window.Scene.enter(roomStyle, $('#gl'));
+          try { window.Scene.enter(roomStyle, $('#gl')); } catch (e) { noteError('3D: ' + e.message); }
         break;
 
       case 'signal': enqueueSignal(m); break;
@@ -1224,8 +1272,9 @@ setInterval(async () => {
       (track && !track.whole && sched[0] ? ', ' + t('diag.chunk') + ' ' + (sched[sched.length - 1].k + 1) + '/' + track.plan.length : '') + ', ' + t('diag.stalls') + ' ' + stalls],
     [t('diag.voicepath'), !gotRemote ? '—' : voiceRoute === 'gain'
       ? t('diag.vp_gain') + ': ' + t('diag.vp_in') + ' ' + Math.round(remoteLevel * 300) + '%, ' + t('diag.vp_out') + ' ' + Math.round(outLevel * 300) + '%'
-      : (voiceFallback ? t('diag.vp_el') : t('diag.vp_wait')) + ', ' + t('diag.vp_net') + ' ' + Math.round(statsRemote * 300) + '%'],
-    [t('diag.level'), Math.round(lastLevel * 100) + '%' + (window.Scene.supported() ? ', ' + window.Scene.fps() + ' fps' : '')]
+      : t('diag.vp_el') + ', ' + t('diag.vp_net') + ' ' + Math.round(statsRemote * 300) + '%'],
+    [t('diag.level'), Math.round(lastLevel * 100) + '%' + (window.Scene.supported() ? ', ' + window.Scene.fps() + ' fps' : '')],
+    [t('diag.errors'), errLog.length ? errLog.slice(-3).join(' · ') : '—']
   ];
   ui.diag.innerHTML = rows.map(r => '<div><span>' + r[0] + '</span><b>' + r[1] + '</b></div>').join('');
 }, 1000);
@@ -1353,7 +1402,11 @@ async function enterRoom(style) {
   if (!roomId) roomId = Math.random().toString(36).slice(2, 8);
   history.replaceState(null, '', '/?room=' + roomId);
   showView('room');
-  if (window.Scene.supported()) window.Scene.enter(roomStyle, $('#gl'));
+  // графика не должна тянуть за собой звук: если 3D не поднялось, комната работает без неё
+  if (window.Scene.supported()) {
+    try { if (!window.Scene.enter(roomStyle, $('#gl'))) noteError(t('toast.no3d')); }
+    catch (e) { noteError('3D: ' + e.message); }
+  }
   attachAnalyser();
   if (ws && ws.readyState === 1) {
     if (isMaster) ws.send(JSON.stringify({ type: 'style', style: roomStyle }));

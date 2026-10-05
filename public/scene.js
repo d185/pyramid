@@ -12,7 +12,7 @@ window.Scene = (function () {
   var kind = null, level = 0, target = 0, playing = false;
   var mats = {}, lights = {}, dust = null, dustSpeed = null, disc = null;
   var tgt = { x: 0, y: 0 }, smooth = { x: 0, y: 0 }, fps = 0, frames = 0, acc = 0;
-  var lost = 0, builds = 0, canvasEl = null;
+  var lost = 0, builds = 0, canvasEl = null, off = null;
 
   function num(v, d) { return v === undefined || v === null ? d : v; }
   function hex(h) {
@@ -393,10 +393,17 @@ window.Scene = (function () {
       catch (e) { return false; }
     },
     /* картинка камня для логотипа и главной страницы — печём тем же шейдером */
+    /* Картинки камня печёт один общий рендерер. Раньше на каждую картинку
+       создавался свой графический контекст и не освобождался; у айфона их
+       мало, и когда они кончались, браузер отбирал самый старый — у комнаты.
+       Так стены и чернели. */
     image: function (which, w, h) {
       var P = MARBLE[which] || MARBLE.green, own = false, r = renderer;
       try {
-        if (!r) { r = new THREE.WebGLRenderer({ antialias: false }); own = true; renderer = r; }
+        if (!r) {
+          if (!off) off = new THREE.WebGLRenderer({ antialias: false });
+          r = off; own = true; renderer = r;
+        }
         var u = marbleUniforms(P);
         u.uDetail.value = 0.0;           // маленьким картинкам детали ни к чему
         var mat = new THREE.ShaderMaterial({
@@ -420,9 +427,9 @@ window.Scene = (function () {
         }
         ctx.putImageData(img, 0, 0);
         q.geometry.dispose(); mat.dispose(); rt.dispose();
-        if (own) { r.dispose(); renderer = null; }
+        if (own) renderer = null;
         return cv;
-      } catch (e) { if (own) { try { r.dispose(); } catch (e2) { } renderer = null; } return null; }
+      } catch (e) { if (own) renderer = null; return null; }
     },
     enter: function (which, canvas) {
       this.dispose();
@@ -430,6 +437,7 @@ window.Scene = (function () {
       kind = MARBLE[which] ? which : 'green';
       canvasEl = canvas;
       var P = MARBLE[kind];
+      if (off) { try { off.forceContextLoss(); off.dispose(); } catch (e) { } off = null; }
       try { renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); }
       catch (e) { return false; }
       var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
@@ -513,7 +521,7 @@ window.Scene = (function () {
           mm.dispose();
         });
       });
-      if (renderer) renderer.dispose();
+      if (renderer) { try { renderer.forceContextLoss(); } catch (e) { } renderer.dispose(); }
       renderer = null; scene = null; camera = null; mats = {}; lights = {}; dust = null; disc = null;
     }
   };

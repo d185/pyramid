@@ -384,8 +384,30 @@ window.Scene = (function () {
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight, false);
   }
+  /* Разобрать сцену, оставив рендерер и контекст */
+  function teardown() {
+    if (raf) cancelAnimationFrame(raf);
+    raf = null;
+    removeEventListener('resize', onResize);
+    removeEventListener('pointermove', onMove);
+    removeEventListener('deviceorientation', onTilt);
+    if (mats.wallRT) mats.wallRT.dispose();
+    if (mats.floorRT) mats.floorRT.dispose();
+    if (scene) scene.traverse(function (o) {
+      if (o.geometry) o.geometry.dispose();
+      var m = o.material;
+      if (!m) return;
+      (Array.isArray(m) ? m : [m]).forEach(function (mm) {
+        for (var k in mm) if (mm[k] && mm[k].isTexture) mm[k].dispose();
+        mm.dispose();
+      });
+    });
+    if (scene && scene.environment) { try { scene.environment.dispose(); } catch (e) { } }
+    scene = null; camera = null; mats = {}; lights = {}; dust = null; disc = null;
+  }
   function onLost(e) { e.preventDefault(); lost++; }
-  function onRestored() { if (kind && canvasEl) api.enter(kind, canvasEl); }
+  /* контекст вернулся — пересобираем сцену на том же рендерере */
+  function onRestored() { if (kind && canvasEl) setTimeout(function () { api.enter(kind, canvasEl); }, 50); }
 
   var api = {
     supported: function () {
@@ -431,15 +453,22 @@ window.Scene = (function () {
         return cv;
       } catch (e) { if (own) renderer = null; return null; }
     },
+    /* Графический контекст у комнаты один на всю жизнь страницы. Освобождать
+       его насильно нельзя: после этого холст больше не даёт новый контекст —
+       на айфоне рисование молча уходит в пустоту, в Chrome падает создание. */
     enter: function (which, canvas) {
-      this.dispose();
+      teardown();
       if (!window.THREE) return false;
       kind = MARBLE[which] ? which : 'green';
-      canvasEl = canvas;
       var P = MARBLE[kind];
-      if (off) { try { off.forceContextLoss(); off.dispose(); } catch (e) { } off = null; }
-      try { renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); }
-      catch (e) { return false; }
+      if (!renderer || canvasEl !== canvas) {
+        if (renderer) { try { renderer.dispose(); } catch (e) { } renderer = null; }
+        try { renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true }); }
+        catch (e) { renderer = null; return false; }
+        canvasEl = canvas;
+        canvas.addEventListener('webglcontextlost', onLost);
+        canvas.addEventListener('webglcontextrestored', onRestored);
+      }
       var touch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
       renderer.setPixelRatio(Math.min(devicePixelRatio, touch ? 1.5 : 2));
       renderer.outputEncoding = THREE.sRGBEncoding;
@@ -461,15 +490,14 @@ window.Scene = (function () {
       addEventListener('resize', onResize);
       addEventListener('pointermove', onMove);
       if (window.DeviceOrientationEvent) addEventListener('deviceorientation', onTilt);
-      canvas.addEventListener('webglcontextlost', onLost);
-      canvas.addEventListener('webglcontextrestored', onRestored);
       loop();
       return true;
     },
     /* Сменить камень, не разбирая комнату: музыка играет, гость на месте,
        меняются только текстуры стен, свет и туман. */
     restyle: function (which) {
-      if (!renderer || !MARBLE[which] || which === kind) return false;
+      if (!renderer || !MARBLE[which]) return false;
+      if (which === kind) return true;        // уже эта гамма — делать нечего
       var P = MARBLE[which];
       kind = which;
       var wallRT = bake(P, 1536), floorRT = bake(P, 1024);
@@ -501,28 +529,9 @@ window.Scene = (function () {
     stats: function () { return { lost: lost, builds: builds }; },
     _debug: function () { return { scene: scene, mats: mats, lights: lights, renderer: renderer }; },
     dispose: function () {
-      if (raf) cancelAnimationFrame(raf);
-      raf = null;
-      removeEventListener('resize', onResize);
-      removeEventListener('pointermove', onMove);
-      removeEventListener('deviceorientation', onTilt);
-      if (canvasEl) {
-        canvasEl.removeEventListener('webglcontextlost', onLost);
-        canvasEl.removeEventListener('webglcontextrestored', onRestored);
-      }
-      if (mats.wallRT) mats.wallRT.dispose();
-      if (mats.floorRT) mats.floorRT.dispose();
-      if (scene) scene.traverse(function (o) {
-        if (o.geometry) o.geometry.dispose();
-        var m = o.material;
-        if (!m) return;
-        (Array.isArray(m) ? m : [m]).forEach(function (mm) {
-          for (var k in mm) if (mm[k] && mm[k].isTexture) mm[k].dispose();
-          mm.dispose();
-        });
-      });
-      if (renderer) { try { renderer.forceContextLoss(); } catch (e) { } renderer.dispose(); }
-      renderer = null; scene = null; camera = null; mats = {}; lights = {}; dust = null; disc = null;
+      teardown();
+      kind = null;
+      if (renderer) { try { renderer.setRenderTarget(null); renderer.clear(); } catch (e) { } }
     }
   };
   return api;

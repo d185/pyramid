@@ -209,6 +209,7 @@ function ensureVoiceCtx(force) {
   voiceGain.connect(vctx.destination);
   outAn = vctx.createAnalyser(); outAn.fftSize = 512;
   voiceGain.connect(outAn);
+  if (vctx !== actx) vctx.onstatechange = () => { if (vctx.state !== 'running') wakeAudio(); };
   if (vctx.state !== 'running') { try { vctx.resume().catch(() => { }); } catch (e) { } }
   voiceNode = null; remoteAn = null;
   if (remoteStream && connectedNow()) probeVoice(remoteStream);
@@ -231,6 +232,17 @@ let sched = [];                    // запущенные куски: { k, src,
 let anchorCtx = 0, anchorTrack = 0; // в момент anchorCtx звучит секунда anchorTrack
 
 function blessMusic() { }          // звукового элемента для музыки больше нет — разрешать нечего
+let wakeTimer = null;
+function wakeAudio() {
+  if (!document.body.classList.contains('in-room')) return;
+  const tryNow = () => {
+    let ok = true;
+    [actx, vctx].forEach(c => { if (c && c.state !== 'running') { ok = false; c.resume().catch(() => { }); } });
+    if (ok) { clearInterval(wakeTimer); wakeTimer = null; musicBlocked = false; }
+  };
+  tryNow();
+  if (!wakeTimer) wakeTimer = setInterval(tryNow, 1000);
+}
 function retryMusic() {
   if (actx && actx.state !== 'running') actx.resume().then(() => { if (actx.state === 'running') musicBlocked = false; }).catch(() => { });
   if (vctx && vctx !== actx && vctx.state !== 'running') vctx.resume().catch(() => { });
@@ -256,6 +268,9 @@ function initAudio() {
   duckGain.gain.value = 1;
   musicGain.connect(duckGain).connect(actx.destination);
   actxAfterMic = !!localStream;
+  /* Айфон может прервать движок, когда начинается звонок. Пока микрофон включён,
+     будить его можно без касания — пробуем сразу и повторяем каждую секунду. */
+  actx.onstatechange = () => { if (actx.state !== 'running') wakeAudio(); };
   /* Как у веб-Телеграма: звуковой элемент всё время играет беззвучный поток —
      так звук страницы остаётся «разогретым» и не засыпает между касаниями. */
   try {
@@ -720,8 +735,8 @@ function makePeer() {
   };
   pc.oniceconnectionstatechange = () => {
     if (connectedNow() && remoteStream && !voiceNode) probeVoice(remoteStream);
-    if (pc.iceConnectionState === 'failed') { toast(t('toast.icefail')); pc.restartIce(); }
-    if (pc.iceConnectionState === 'disconnected') setTimeout(() => {
+    if (pc.iceConnectionState === 'failed' && isInitiator) { toast(t('toast.icefail')); pc.restartIce(); }
+    if (pc.iceConnectionState === 'disconnected' && isInitiator) setTimeout(() => {
       if (pc && pc.iceConnectionState === 'disconnected') pc.restartIce();
     }, 2500);
   };
@@ -729,7 +744,9 @@ function makePeer() {
   flushSignals();
 
   // ограничиваем голос: моно, немного, но стабильно
+  const myPc = pc;
   setTimeout(async () => {
+    if (!pc || pc !== myPc) return;       // за полсекунды соединение могло закрыться
     const sender = pc.getSenders().find(s => s.track && s.track.kind === 'audio');
     if (!sender) return;
     const p = sender.getParameters();
@@ -852,6 +869,11 @@ function connect() {
       case 'pong': onPong(m); break;
 
       case 'welcome':
+        if (pc && selfId && selfId !== m.selfId) {   // переподключились под новым номером — старый звонок недействителен
+          try { pc.close(); } catch (e) { } pc = null; queuedSignals = [];
+          if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } voiceNode = null; }
+          remoteAn = null; voiceRoute = 'element'; gotRemote = false;
+        }
         selfId = m.selfId; masterId = m.masterId; tracks = m.tracks;
         if (m.state.style && m.state.style !== roomStyle) {
           roomStyle = m.state.style;

@@ -153,7 +153,22 @@ function serveFile(res, file, req) {
   });
 }
 
+/* Родное приложение открывает страницу из своей оболочки (capacitor://localhost
+   на айфоне, http://localhost на андроиде) и ходит к нам как на чужой домен.
+   Разрешаем это для данных и звука; для звука ещё и запросы кусками. */
+function cors(req, res) {
+  const origin = req.headers.origin || '';
+  if (!/^(capacitor|ionic):\/\/localhost$|^https?:\/\/localhost(:\d+)?$/.test(origin)) return;
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+  res.setHeader('Access-Control-Max-Age', '86400');
+}
+
 const server = http.createServer((req, res) => {
+  cors(req, res);
+  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
   const url = new URL(req.url, 'http://x');
   const p = decodeURIComponent(url.pathname);
 
@@ -273,6 +288,24 @@ function parseIceText(text) {
 }
 
 async function getIceServers() {
+  /* Cloudflare Realtime TURN: 1000 ГБ в месяц бесплатно, 330 точек по миру,
+     подключение к ближайшей. Сервер сам берёт у Cloudflare свежие пароли по
+     ключу приложения; ключ в браузер не уходит. */
+  if (process.env.CF_TURN_KEY_ID && process.env.CF_TURN_API_TOKEN) {
+    if (iceCache && Date.now() - iceCacheAt < 20 * 3600e3) return iceCache;
+    try {
+      const r = await fetch('https://rtc.live.cloudflare.com/v1/turn/keys/' + encodeURIComponent(process.env.CF_TURN_KEY_ID) + '/credentials/generate-ice-servers', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + process.env.CF_TURN_API_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ttl: 86400 })
+      });
+      const j = r.ok ? await r.json() : null;
+      let list = j && j.iceServers;
+      if (list && !Array.isArray(list)) list = [list];
+      if (list && list.length) { iceCache = list; iceCacheAt = Date.now(); return list; }
+      console.log('Cloudflare TURN ответил', r.status, '— проверьте ключ и токен');
+    } catch (e) { console.log('Cloudflare TURN недоступен:', e.message); }
+  }
   // вариант 0: настройки из панели Metered вставлены целиком
   const pasted = parseIceText(process.env.ICE_SERVERS);
   if (pasted) return pasted;
@@ -323,8 +356,8 @@ const rooms = new Map();
 function getRoom(id) {
   if (!rooms.has(id)) {
     rooms.set(id, {
-      id, peers: new Map(), masterId: null,
-      state: { trackId: null, playing: false, offset: 0, startAt: 0, style: 'pyramid' },
+      id, peers: new Map(), masterId: null, masterKey: '', masterLeftAt: 0,
+      state: { trackId: null, playing: false, offset: 0, startAt: 0, firstReadyAt: 0, style: 'green' },
       chat: []
     });
   }
@@ -342,12 +375,49 @@ function peersInfo(room) {
 }
 
 /* когда оба зарядили трек — назначаем общий момент старта */
+/* Участник ушёл: роль Мастера ждёт его возвращения минуту, комната — две */
+function dropPeer(room, id) {
+  if (!room.peers.has(id)) return;
+  room.peers.delete(id);
+  if (room.masterId === id) {
+    room.masterId = null; room.masterLeftAt = Date.now();
+    setTimeout(() => {
+      if (!room.masterId && room.peers.size && Date.now() - room.masterLeftAt >= 60000) {
+        room.masterId = [...room.peers.keys()][0];
+        room.masterKey = room.peers.get(room.masterId).key;
+        broadcast(room, { type: 'peers', peers: peersInfo(room), masterId: room.masterId });
+      }
+    }, 61000);
+  }
+  if (!room.peers.size) { setTimeout(() => { if (!room.peers.size) rooms.delete(room.id); }, 120000); return; }
+  broadcast(room, { type: 'peers', peers: peersInfo(room), masterId: room.masterId });
+  broadcast(room, { type: 'peer-left', id });
+  maybeStart(room);
+}
+
+/* Призраки: соединение на мобильной сети рвётся незаметно для сервера, и участник
+   остаётся в комнате, никогда не отвечая «готов». Без этой чистки ни один трек
+   не мог начаться — он ждал призрака. */
+setInterval(() => {
+  const now = Date.now();
+  for (const room of rooms.values())
+    for (const [id, p] of [...room.peers.entries()])
+      if (now - (p.seen || 0) > 15000) { try { p.ws.terminate(); } catch (e) { } dropPeer(room, id); }
+}, 5000);
+
 function maybeStart(room) {
   const st = room.state;
   if (!st.trackId || st.playing) return;
   const peers = [...room.peers.values()];
   if (!peers.length) return;
-  if (!peers.every(p => p.ready === st.trackId)) return;
+  const ready = peers.filter(p => p.ready === st.trackId);
+  if (!ready.length) return;
+  // ждём всех, но не дольше 8 секунд: опоздавший подключится с нужного места
+  if (ready.length < peers.length) {
+    if (!st.firstReadyAt) { st.firstReadyAt = Date.now(); setTimeout(() => maybeStart(room), 8200); }
+    if (Date.now() - st.firstReadyAt < 8000) return;
+  }
+  st.firstReadyAt = 0;
   st.startAt = Date.now() + 500;      // запас на доставку команды
   st.playing = true;
   broadcast(room, { type: 'play', startAt: st.startAt, offset: st.offset, trackId: st.trackId });
@@ -360,14 +430,21 @@ wss.on('connection', ws => {
     let m; try { m = JSON.parse(data); } catch (e) { return; }
 
     /* часы: отвечаем как можно быстрее и без обработки */
-    if (m.type === 'ping') return send(ws, { type: 'pong', t0: m.t0, t1: Date.now() });
+    if (m.type === 'ping') { const p = room && room.peers.get(selfId); if (p) p.seen = Date.now(); return send(ws, { type: 'pong', t0: m.t0, t1: Date.now() }); }
 
     if (m.type === 'hello') {
       room = getRoom((m.room || 'main').slice(0, 64));
       selfId = crypto.randomBytes(6).toString('hex');
-      room.peers.set(selfId, { ws, name: (m.name || 'Гость').slice(0, 40), ready: null, speaking: false });
-      if (!room.masterId) {
-        room.masterId = selfId;                        // первый вошёл — тот и Мастер
+      const key = String(m.key || '').slice(0, 64);
+      room.peers.set(selfId, { ws, name: (m.name || 'Гость').slice(0, 40), ready: null, speaking: false, key, seen: Date.now() });
+      /* Роль Мастера привязана к устройству, а не к соединению. Мастер отправляет
+         приглашение, переключается в Сообщения — Safari рвёт соединение. Раньше
+         роль в ту же секунду уходила первому оставшемуся. Теперь Мастер, вернувшись
+         с тем же ключом, получает роль обратно, а без него она ждёт его минуту. */
+      if (key && room.masterKey === key) {
+        room.masterId = selfId; room.masterLeftAt = 0;
+      } else if (!room.masterId && (!room.masterKey || !room.masterLeftAt || Date.now() - room.masterLeftAt > 60000)) {
+        room.masterId = selfId; room.masterKey = key;  // первый вошёл — тот и Мастер
         if (m.style) room.state.style = m.style;       // и он же выбирает комнату
       }
       send(ws, {
@@ -380,6 +457,7 @@ wss.on('connection', ws => {
     }
 
     if (!room || !selfId) return;
+    const meNow = room.peers.get(selfId); if (meNow) meNow.seen = Date.now();
     const isMaster = room.masterId === selfId;
     const st = room.state;
 
@@ -397,9 +475,14 @@ wss.on('connection', ws => {
 
       case 'select':
         if (!isMaster) return;
-        st.trackId = m.trackId; st.offset = 0; st.playing = false; st.startAt = 0;
+        st.trackId = m.trackId; st.offset = 0; st.playing = false; st.startAt = 0; st.firstReadyAt = 0;
         for (const p of room.peers.values()) p.ready = null;
         broadcast(room, { type: 'load', trackId: st.trackId, offset: 0 });
+        break;
+
+      case 'ended':
+        if (!isMaster) return;
+        st.playing = false; st.offset = 0; st.startAt = 0;
         break;
 
       case 'ready': {
@@ -465,14 +548,7 @@ wss.on('connection', ws => {
     }
   });
 
-  ws.on('close', () => {
-    if (!room || !selfId) return;
-    room.peers.delete(selfId);
-    if (room.masterId === selfId) room.masterId = [...room.peers.keys()][0] || null;
-    if (!room.peers.size) { rooms.delete(room.id); return; }
-    broadcast(room, { type: 'peers', peers: peersInfo(room), masterId: room.masterId });
-    broadcast(room, { type: 'peer-left', id: selfId });
-  });
+  ws.on('close', () => { if (room && selfId) dropPeer(room, selfId); });
 });
 
 process.on('SIGTERM', () => {
@@ -488,7 +564,7 @@ server.listen(PORT, () => {
   if (broken.length) console.log('ФАЙЛЫ НЕ ЯВЛЯЮТСЯ ЗВУКОМ:', broken.map(t => t.id + ' (' + t.bad + ')').join(', '));
   if (process.env.ICE_SERVERS && !parseIceText(process.env.ICE_SERVERS))
     console.log('ICE_SERVERS задан, но не разобрался — проверьте, что скопирован весь массив');
-  if (!process.env.TURN_URL && !process.env.METERED_KEY && !process.env.METERED_URL && !parseIceText(process.env.ICE_SERVERS))
+  if (!process.env.TURN_URL && !process.env.METERED_KEY && !process.env.METERED_URL && !process.env.CF_TURN_KEY_ID && !parseIceText(process.env.ICE_SERVERS))
     console.log('TURN не настроен: звонки между телефонами в разных сетях не соединятся. См. DEPLOY.md');
   else console.log('TURN настроен');
 });

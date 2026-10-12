@@ -182,6 +182,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (p === '/api/rooms') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    return res.end(JSON.stringify({ rooms: [...rooms.values()].filter(r => r.peers.size).length }));
+  }
   if (p === '/api/tracks') {
     res.writeHead(200, { 'Content-Type': MIME['.json'] });
     return res.end(JSON.stringify(listTracks()));
@@ -357,7 +361,7 @@ function getRoom(id) {
   if (!rooms.has(id)) {
     rooms.set(id, {
       id, peers: new Map(), masterId: null, masterKey: '', masterLeftAt: 0,
-      state: { trackId: null, playing: false, offset: 0, startAt: 0, firstReadyAt: 0, style: 'green' },
+      state: { trackId: null, playing: false, paused: false, offset: 0, startAt: 0, firstReadyAt: 0, style: 'green' },
       chat: []
     });
   }
@@ -374,22 +378,47 @@ function peersInfo(room) {
   return [...room.peers.entries()].map(([id, p]) => ({ id, name: p.name, role: id === room.masterId ? 'master' : 'guest' }));
 }
 
-/* когда оба зарядили трек — назначаем общий момент старта */
-/* Участник ушёл: роль Мастера ждёт его возвращения минуту, комната — две */
+/* Сколько комната ждёт Мастера, если у него оборвалась связь. Вышел сам —
+   комната закрывается сразу; пропал — музыка встаёт, и через это время
+   гость тоже уходит на главную. */
+const GRACE = +process.env.MASTER_GRACE_MS || 60000;
+
+/* Комната закрыта: всем оставшимся — сообщение «закрыто» (приложение само
+   уходит на главную), потом соединения рвём, а комнату стираем. */
+function closeRoom(room, reason) {
+  if (rooms.get(room.id) === room) rooms.delete(room.id);
+  broadcast(room, { type: 'closed', reason });
+  const left = [...room.peers.values()];
+  room.peers.clear();
+  room.state.playing = false;
+  setTimeout(() => left.forEach(p => { try { p.ws.close(); } catch (e) { } }), 200);
+}
+
+/* Музыка встаёт там, где остановилась: у гостя она больше не должна играть */
+function pauseRoom(room) {
+  const st = room.state;
+  if (!st.trackId) return;
+  if (st.playing) st.offset = Math.max(0, st.offset + Math.max(0, Date.now() - st.startAt) / 1000);
+  st.playing = false; st.paused = true; st.startAt = 0; st.firstReadyAt = 0;
+  broadcast(room, { type: 'paused', offset: st.offset });
+}
+
+/* Участник ушёл. Мастер пропал — ждём его возвращения GRACE, потом закрываем комнату */
 function dropPeer(room, id) {
   if (!room.peers.has(id)) return;
   room.peers.delete(id);
   if (room.masterId === id) {
     room.masterId = null; room.masterLeftAt = Date.now();
-    setTimeout(() => {
-      if (!room.masterId && room.peers.size && Date.now() - room.masterLeftAt >= 60000) {
-        room.masterId = [...room.peers.keys()][0];
-        room.masterKey = room.peers.get(room.masterId).key;
-        broadcast(room, { type: 'peers', peers: peersInfo(room), masterId: room.masterId });
-      }
-    }, 61000);
+    if (room.peers.size) {
+      pauseRoom(room);
+      broadcast(room, { type: 'master-away', graceMs: GRACE });
+      setTimeout(() => {
+        if (rooms.get(room.id) === room && !room.masterId && room.peers.size &&
+            Date.now() - room.masterLeftAt >= GRACE - 50) closeRoom(room, 'master-gone');
+      }, GRACE + 100);
+    }
   }
-  if (!room.peers.size) { setTimeout(() => { if (!room.peers.size) rooms.delete(room.id); }, 120000); return; }
+  if (!room.peers.size) { setTimeout(() => { if (!room.peers.size && rooms.get(room.id) === room) rooms.delete(room.id); }, 120000); return; }
   broadcast(room, { type: 'peers', peers: peersInfo(room), masterId: room.masterId });
   broadcast(room, { type: 'peer-left', id });
   maybeStart(room);
@@ -407,7 +436,7 @@ setInterval(() => {
 
 function maybeStart(room) {
   const st = room.state;
-  if (!st.trackId || st.playing) return;
+  if (!st.trackId || st.playing || st.paused || !room.masterId) return;   // на паузе и без Мастера музыку не запускаем
   const peers = [...room.peers.values()];
   if (!peers.length) return;
   const ready = peers.filter(p => p.ready === st.trackId);
@@ -443,7 +472,7 @@ wss.on('connection', ws => {
          с тем же ключом, получает роль обратно, а без него она ждёт его минуту. */
       if (key && room.masterKey === key) {
         room.masterId = selfId; room.masterLeftAt = 0;
-      } else if (!room.masterId && (!room.masterKey || !room.masterLeftAt || Date.now() - room.masterLeftAt > 60000)) {
+      } else if (!room.masterId && (!room.masterKey || !room.masterLeftAt || Date.now() - room.masterLeftAt > GRACE)) {
         room.masterId = selfId; room.masterKey = key;  // первый вошёл — тот и Мастер
         if (m.style) room.state.style = m.style;       // и он же выбирает комнату
       }
@@ -475,14 +504,14 @@ wss.on('connection', ws => {
 
       case 'select':
         if (!isMaster) return;
-        st.trackId = m.trackId; st.offset = 0; st.playing = false; st.startAt = 0; st.firstReadyAt = 0;
+        st.trackId = m.trackId; st.offset = 0; st.playing = false; st.paused = false; st.startAt = 0; st.firstReadyAt = 0;
         for (const p of room.peers.values()) p.ready = null;
         broadcast(room, { type: 'load', trackId: st.trackId, offset: 0 });
         break;
 
       case 'ended':
         if (!isMaster) return;
-        st.playing = false; st.offset = 0; st.startAt = 0;
+        st.playing = false; st.paused = true; st.offset = 0; st.startAt = 0;   // дослушали: само не начнётся
         break;
 
       case 'ready': {
@@ -496,20 +525,20 @@ wss.on('connection', ws => {
       case 'pause':
         if (!isMaster) return;
         st.offset = Math.max(0, +m.offset || 0);
-        st.playing = false;
+        st.playing = false; st.paused = true;
         broadcast(room, { type: 'paused', offset: st.offset });
         break;
 
       case 'resume':
         if (!isMaster) return;
-        st.playing = false;
+        st.playing = false; st.paused = false;
         maybeStart(room);
         break;
 
       case 'seek': {
         if (!isMaster) return;
         st.offset = Math.max(0, +m.offset || 0);
-        st.playing = false;
+        st.playing = false; st.paused = false;
         st.startAt = Date.now() + 250;
         st.playing = true;
         broadcast(room, { type: 'play', startAt: st.startAt, offset: st.offset, trackId: st.trackId });
@@ -536,11 +565,17 @@ wss.on('connection', ws => {
         break;
       }
 
+      case 'leave':
+        // Мастер вышел сам: комната закрывается для всех сразу
+        if (isMaster) closeRoom(room, 'master-left');
+        break;
+
       case 'transfer': {
         if (!isMaster) return;
         const other = [...room.peers.keys()].find(id => id !== selfId);
         if (other) {
-          room.masterId = other;
+          room.masterId = other; room.masterLeftAt = 0;
+          room.masterKey = room.peers.get(other).key;   // иначе прежний Мастер по ключу забрал бы роль обратно
           broadcast(room, { type: 'peers', peers: peersInfo(room), masterId: room.masterId });
         }
         break;

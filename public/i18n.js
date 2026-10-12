@@ -11,6 +11,8 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'toast.roomclosed': 'The Master left — the room is closed',
+    'toast.masteraway': 'The Master lost connection — waiting for them to come back',
     'diag.download': 'download',
     'diag.v_lostnet': 'the network dropped the call — reconnecting',
     'toast.noaudio': 'The sound engine could not start — reload the page',
@@ -218,6 +220,8 @@ window.I18N = {
   },
 
   ru: {
+    'toast.roomclosed': 'Мастер вышел — комната закрыта',
+    'toast.masteraway': 'У Мастера пропала связь — ждём его возвращения',
     'diag.download': 'загрузка',
     'diag.v_lostnet': 'сеть оборвала связь — переподключаюсь',
     'toast.noaudio': 'Звуковой движок не запустился — перезагрузите страницу',
@@ -425,6 +429,8 @@ window.I18N = {
   },
 
   es: {
+    'toast.roomclosed': 'El Anfitrión salió: la sala está cerrada',
+    'toast.masteraway': 'El Anfitrión perdió la conexión: lo esperamos',
     'diag.download': 'descarga',
     'diag.v_lostnet': 'la red cortó la llamada — reconectando',
     'toast.noaudio': 'El motor de sonido no arrancó — recarga la página',
@@ -632,6 +638,8 @@ window.I18N = {
   },
 
   fr: {
+    'toast.roomclosed': 'Le Maître est parti — la salle est fermée',
+    'toast.masteraway': "Le Maître a perdu la connexion — on l'attend",
     'diag.download': 'téléchargement',
     'diag.v_lostnet': 'le réseau a coupé l’appel — reconnexion',
     'toast.noaudio': 'Le moteur audio n’a pas démarré — rechargez la page',
@@ -839,6 +847,8 @@ window.I18N = {
   },
 
   de: {
+    'toast.roomclosed': 'Der Meister ist gegangen — der Raum ist geschlossen',
+    'toast.masteraway': 'Der Meister hat die Verbindung verloren — wir warten auf ihn',
     'diag.download': 'Download',
     'diag.v_lostnet': 'das Netz hat die Verbindung getrennt — verbinde neu',
     'toast.noaudio': 'Die Audio-Engine startete nicht — Seite neu laden',

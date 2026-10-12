@@ -23,7 +23,7 @@ function fakeRTC(w,log){ /* log задаётся ниже */
     pc.createAnswer=async()=>({type:'answer',sdp:'v=0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\n'});
     pc.setRemoteDescription=async(d)=>{pc.remote=d;pc.remoteDescription=d;if(d.type==='answer'){pc.signalingState='stable';connect();}};
     pc.addIceCandidate=async()=>{};pc.restartIce=()=>{};pc.close=()=>{pc.iceConnectionState='closed'};
-    pc.getStats=async()=>({forEach(f){ f({type:'inbound-rtp',kind:'audio',audioLevel:log.remoteTalking?0.2:0}); f({type:'media-source',kind:'audio',audioLevel:0.08}); }});
+    pc.getStats=async()=>({forEach(f){ f({type:'inbound-rtp',kind:'audio',audioLevel:log.remoteTalking?0.2:0,packetsReceived:(log.rx=(log.rx||0)+50)}); f({type:'media-source',kind:'audio',audioLevel:0.08}); }});
     function connect(){ if(pc.iceConnectionState==='connected')return; pc.iceConnectionState='connected';
       const track={kind:'audio',enabled:true}; const stream={getAudioTracks:()=>[track],getTracks:()=>[track],id:'remote',isRemote:true};
       setTimeout(()=>{ pc.ontrack&&pc.ontrack({streams:[stream],track}); },5);
@@ -243,18 +243,18 @@ const wait=ms=>new Promise(r=>setTimeout(r,ms));
   await wait(400);
   ok('у Мастера свой микрофон слышен, не 0%', M.w.__pyr.state().selfLevel>0.01, (M.w.__pyr.state().selfLevel*300).toFixed(0)+'%');
 
-  /* голос: как у Телеграма — сразу через свой регулятор, элемент немой */
-  ok('у Мастера голос гостя сразу через свой регулятор, элемент немой', M.w.__pyr.state().voiceRoute==='gain' && M.w.__pyr.state().muted===true, M.w.__pyr.state().voiceRoute);
-  ok('у гостя голос Мастера сразу через свой регулятор', G.w.__pyr.state().voiceRoute==='gain', G.w.__pyr.state().voiceRoute);
+  /* голос: сначала звучит обычный элемент (слышно всегда), на свой регулятор — когда движок услышал живой звук */
+  ok('пока никто не говорил, голос Мастера у гостя идёт элементом и слышен', G.w.__pyr.state().voiceRoute==='element' && G.w.__pyr.state().muted===false, G.w.__pyr.state().voiceRoute+', элемент '+(G.w.__pyr.state().muted?'немой':'звучит'));
   M.log.remoteTalking=true; G.log.remoteTalking=true;
-  await wait(800);
-  ok('собеседник говорит — регулятор слышит его', M.w.__pyr.state().voiceRoute==='gain' && G.w.__pyr.state().voiceRoute==='gain');
+  await wait(1800);
+  ok('у Мастера голос гостя ушёл на свой регулятор, элемент немой', M.w.__pyr.state().voiceRoute==='gain' && M.w.__pyr.state().muted===true, M.w.__pyr.state().voiceRoute);
+  ok('у гостя голос Мастера ушёл на свой регулятор', G.w.__pyr.state().voiceRoute==='gain' && G.w.__pyr.state().muted===true, G.w.__pyr.state().voiceRoute);
   const v=M.$('#voice'); v.value=25; v.dispatchEvent(new M.w.Event('input'));
   ok('ползунок голоса у Мастера меняет громкость', Math.abs(M.w.__pyr.state().voiceGain-Math.pow(0.25,1.5))<1e-9);
   const v2=G.$('#voice'); v2.value=40; v2.dispatchEvent(new G.w.Event('input'));
   ok('ползунок голоса у гостя меняет громкость', Math.abs(G.w.__pyr.state().voiceGain-Math.pow(0.4,1.5))<1e-9);
-  /* запасной путь: движок у гостя оглох, а собеседник говорит — через 2 с голос идёт элементом */
-  G.log.deafWebAudio=true; await wait(2800);
+  /* запасной путь: движок у гостя оглох, а пакеты идут и собеседник говорит — через 3 с голос идёт элементом */
+  G.log.deafWebAudio=true; await wait(4200);
   ok('движок оглох — у гостя голос сам ушёл на обычный путь, звук включён', G.w.__pyr.state().voiceRoute==='element' && G.w.__pyr.state().muted===false, G.w.__pyr.state().voiceRoute);
 
   ok('ошибок у Мастера нет', M.log.errs.length===0, M.log.errs.slice(0,2).join(' | '));

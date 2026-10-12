@@ -1,0 +1,16 @@
+{
+	"appId": "com.pyramid.rooms",
+	"appName": "Pyramid",
+	"webDir": "www",
+	"ios": {
+		"contentInset": "never",
+		"backgroundColor": "#04170F",
+		"allowsLinkPreview": false,
+		"scrollEnabled": true
+	},
+	"server": {
+		"url": "https://pyramid-fp70.onrender.com",
+		"cleartext": false
+	},
+	"packageClassList": []
+}

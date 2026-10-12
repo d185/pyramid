@@ -1,0 +1,19 @@
+{
+  "name": "pyramid-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pyramid — родная оболочка для iPhone и Android вокруг веб-приложения",
+  "scripts": {
+    "www": "node build-www.js",
+    "sync": "npm run www && npx cap sync",
+    "ios": "npm run sync && npx cap open ios",
+    "icons": "npx @capacitor/assets generate --ios --iconBackgroundColor '#04170F' --splashBackgroundColor '#04170F'"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2"
+  }
+}

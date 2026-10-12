@@ -453,10 +453,13 @@ async function startAt(startAtServer, offset) {
 
 /* Загрузка трека. Первые полтора мегабайта — сразу: этого хватает на первый кусок,
    и музыка стартует почти мгновенно. Остальное подтягивается в фоне не быстрее
-   250 КБ/с — это в десять раз быстрее, чем нужно для звука, но оставляет канал
-   голосу. Раньше весь файл качался на полной скорости, и первые полминуты
-   голосу не хватало сети. */
-const FIRST = 1536 * 1024, PIECE = 512 * 1024, RATE = 250 * 1024;
+   120 КБ/с — это в 7 раз быстрее, чем нужно для звука (MP3 128 кбит/с — 16 КБ/с),
+   но канал остаётся голосу. Частые пакеты голоса не любят длинной очереди перед
+   собой: чем крупнее кусок и быстрее поток, тем длиннее очередь на телефоне
+   (задержка и потери голоса), поэтому куски мелкие, а скорость ниже прежней.
+   Если голос проседает, скорость падает ещё вдвое с лишним (rateScale). */
+const FIRST = 1024 * 1024, PIECE = 128 * 1024, RATE = 120 * 1024;
+let rateScale = 1;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 let dl = null;
 async function startDownload(url, token) {
@@ -481,7 +484,7 @@ async function startDownload(url, token) {
       const b = new Uint8Array(await rr.arrayBuffer());
       d.buf.set(b, d.got); d.got += b.length;
       if (d.got >= total) { d.done = true; break; }
-      const should = (d.got - start) / RATE * 1000, spent = performance.now() - t0;
+      const should = (d.got - start) / (RATE * rateScale) * 1000, spent = performance.now() - t0;
       if (should > spent) await sleep(Math.min(1500, should - spent));
     }
   })();
@@ -591,41 +594,39 @@ const VOLUME_LOCKED = (() => {
 })();
 let voiceNode = null, remoteAn = null, voiceFallback = false, remoteLevel = 0, outLevel = 0, outAn = null;
 let voiceRoute = 'element', statsRemote = 0, statsSelf = 0, deafSince = 0, remoteStream = null;
-/* Голос собеседника сначала идёт обычным звуковым элементом — так он слышен
-   всегда. Собственный регулятор громкости в это время только слушает.
-   Как только он услышал живой звук — переключаемся на него, и ползунок начинает
-   работать. Если регулятор глух, мы на нём никогда и не окажемся. А если
-   оказались и он оглох, хотя по сведениям соединения голос идёт, — возврат. */
+/* Голос собеседника ВСЕГДА начинает звучать обычным звуковым элементом — так
+   он слышен на любом устройстве. Рядом тот же поток слушает звуковой движок
+   (только слушает, наружу не звучит). Как только движок услышал живой звук,
+   голос переводится на его регулятор громкости: ползунок работает ровно,
+   а на айфоне — вообще только так. Если движок молчит — остаёмся на элементе
+   и голос не пропадает. А если мы уже на регуляторе и он оглох, хотя пакеты
+   идут и собеседник говорит, — возврат на элемент. */
 function lvl(an) {
   const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a);
   let s = 0; for (let i = 0; i < a.length; i++) { const v = (a[i] - 128) / 128; s += v * v; }
   return Math.sqrt(s / a.length);
 }
 function connectedNow() { return !!pc && (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed'); }
-/* Схема веб-Телеграма для голоса собеседника: поток → звуковой движок →
-   регулятор громкости → динамик. Поток при этом подключён к НЕМОМУ звуковому
-   элементу: без этого Chrome не отдаёт звук в движок. Подключаем только после
-   установки соединения — раньше узел выдаёт тишину. Запасной путь: если движок
-   молчит, а по сведениям соединения голос идёт, — включаем звук элемента. */
-function lvl(an) {
-  const a = new Uint8Array(an.fftSize); an.getByteTimeDomainData(a);
-  let s = 0; for (let i = 0; i < a.length; i++) { const v = (a[i] - 128) / 128; s += v * v; }
-  return Math.sqrt(s / a.length);
-}
+let liveHits = 0, rxRate = 0, rxPrev = 0, rxPrevAt = 0;
 function probeVoice(stream) {
   if (!vctx) ensureVoiceCtx();
-  if (!vctx || !voiceGain || voiceFallback) return;
+  if (!vctx || !voiceGain) return;
   if (voiceNode && voiceNode.mediaStream === stream) return;
   try {
     if (voiceNode) voiceNode.disconnect();
     voiceNode = vctx.createMediaStreamSource(stream);
     remoteAn = vctx.createAnalyser(); remoteAn.fftSize = 512;
-    voiceNode.connect(remoteAn);
-    voiceNode.connect(voiceGain);          // главный путь — сразу, как у Телеграма
-    voiceRoute = 'gain';
-    remoteAudio.muted = true;              // элемент только «потребляет» поток
+    voiceNode.connect(remoteAn);           // только слушает: звук пока идёт элементом
+    voiceRoute = 'element'; liveHits = 0; deafSince = 0;
+    remoteAudio.muted = false; playRemote();
     if (vctx.state !== 'running') vctx.resume().catch(() => { });
   } catch (e) { voiceNode = null; remoteAn = null; voiceRoute = 'element'; remoteAudio.muted = false; }
+}
+function promoteVoice() {
+  if (!voiceNode || voiceRoute !== 'element' || voiceFallback) return;
+  try { voiceNode.connect(voiceGain); } catch (e) { return; }
+  voiceRoute = 'gain'; deafSince = 0;
+  remoteAudio.muted = true;                // элемент только «потребляет» поток
 }
 function useElementRoute(stuck) {
   if (voiceNode && voiceRoute === 'gain') { try { voiceNode.disconnect(voiceGain); } catch (e) { } }
@@ -638,12 +639,16 @@ setInterval(() => {
   if (outAn) outLevel = lvl(outAn);
   if (!remoteAn) return;
   remoteLevel = lvl(remoteAn);
-  if (voiceRoute === 'gain') {
-    // доказательство — только сам приходящий звук; сообщение «говорю» через сервер
-    // ничего не доказывает: оно приходит и тогда, когда соединение оборвалось
-    if (connectedNow() && statsRemote > 0.02 && remoteLevel < 0.001) {
+  if (voiceRoute === 'element' && !voiceFallback) {
+    if (remoteLevel > 0.008 && ++liveHits >= 4) promoteVoice();
+  } else if (voiceRoute === 'gain') {
+    /* Оглох ли регулятор: пакеты идут (≥20 в секунду), собеседник говорит
+       (по его же сообщению или по статистике), а на входе движка тишина. */
+    const flowing = connectedNow() && rxRate >= 20;
+    const talking = peerSpeaking || statsRemote > 0.02;
+    if (flowing && talking && remoteLevel < 0.002) {
       if (!deafSince) deafSince = performance.now();
-      else if (performance.now() - deafSince > 2000) useElementRoute(true);
+      else if (performance.now() - deafSince > 3000) useElementRoute(true);
     } else deafSince = 0;
   }
 }, 200);
@@ -654,9 +659,16 @@ setInterval(async () => {
   try {
     const st = await pc.getStats();
     st.forEach(r => {
-      if (r.kind !== 'audio' || typeof r.audioLevel !== 'number') return;
-      if (r.type === 'inbound-rtp') statsRemote = r.audioLevel;
-      if (r.type === 'media-source') statsSelf = r.audioLevel;
+      if (r.kind !== 'audio') return;
+      if (r.type === 'inbound-rtp') {
+        if (typeof r.audioLevel === 'number') statsRemote = r.audioLevel;
+        if (typeof r.packetsReceived === 'number') {
+          const now = performance.now();
+          if (rxPrevAt && now > rxPrevAt) rxRate = Math.max(0, (r.packetsReceived - rxPrev) / ((now - rxPrevAt) / 1000));
+          rxPrev = r.packetsReceived; rxPrevAt = now;
+        }
+      }
+      if (r.type === 'media-source' && typeof r.audioLevel === 'number') statsSelf = r.audioLevel;
     });
   } catch (e) { }
 }, 400);
@@ -749,6 +761,7 @@ function flushSignals() {
 function makePeer() {
   pc = new RTCPeerConnection({ iceServers: cfg.iceServers, bundlePolicy: 'max-bundle' });
   gotRemote = false; stalled = 0; pendingCandidates = []; iceSent = iceGot = iceDropped = 0;
+  rxPrev = 0; rxPrevAt = 0; rxRate = 0; liveHits = 0;
 
   const myTrack = localStream ? localStream.getAudioTracks()[0] : silentTrack();
   if (myTrack) pc.addTrack(myTrack, localStream || new MediaStream([myTrack]));
@@ -765,11 +778,12 @@ function makePeer() {
     gotRemote = true;
     const stream = e.streams[0] || new MediaStream([e.track]);
     remoteStream = stream;
-    voiceRoute = 'element';
+    if (voiceNode && voiceRoute === 'gain') { try { voiceNode.disconnect(voiceGain); } catch (er) { } }
+    voiceRoute = 'element'; liveHits = 0; deafSince = 0;
     remoteAudio.srcObject = stream;
     remoteAudio.muted = false;
     remoteAudio.setAttribute('playsinline', 'true');
-    remoteAudio.volume = +ui.voice.value / 100;
+    remoteAudio.volume = Math.pow(+ui.voice.value / 100, 1.5);
     playRemote();
     e.track.onunmute = () => {
       if (voiceRoute !== 'gain') { remoteAudio.srcObject = stream; remoteAudio.muted = false; }
@@ -867,6 +881,7 @@ async function adaptBitrate(reset) {
     const bad = lossPct > 5 || rtt > 0.35, good = lossPct < 1 && rtt < 0.2;
     if ((bad && !lowBitrate) || (good && lowBitrate)) {
       lowBitrate = bad && !good;
+      rateScale = lowBitrate ? 0.4 : 1;      // голос важнее: загрузка музыки отходит в тень
       const sender = pc.getSenders().find(x => x.track && x.track.kind === 'audio');
       if (!sender) return;
       const p = sender.getParameters(); if (!p.encodings || !p.encodings.length) p.encodings = [{}];
@@ -974,9 +989,10 @@ function applyDuck() {
 }
 
 /* ---------------- связь с сервером ---------------- */
-let reconnectDelay = 500;
+let reconnectDelay = 500, wantRoom = false;
 
 function connect() {
+  wantRoom = true;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
   ws = new WebSocket(SERVER ? SERVER.replace(/^http/, 'ws') : proto + '://' + location.host);
 
@@ -1010,6 +1026,7 @@ function connect() {
         setupPeer(m.peers);
         if (m.state.trackId) {
           await loadTrack(m.state.trackId);
+          if (!wantRoom) break;
           if (m.state.playing) startAt(m.state.startAt, m.state.offset);
           else { serverOffset = m.state.offset; }
         }
@@ -1043,6 +1060,7 @@ function connect() {
       case 'load': await loadTrack(m.trackId); break;
       case 'play':
         if (!buffer || currentTrack?.id !== m.trackId) await loadTrack(m.trackId);
+        if (!wantRoom) break;
         startAt(m.startAt, m.offset);
         break;
       case 'paused':
@@ -1052,12 +1070,15 @@ function connect() {
       case 'speaking': peerSpeaking = m.on; applyDuck(); break;
       case 'chat': addChat(m.msg); break;
       case 'readyState': break;
+      case 'closed': leaveRoom('toast.roomclosed'); break;      // Мастер вышел — гость тоже уходит сразу
+      case 'master-away': toast(t('toast.masteraway')); break;  // музыку сервер уже поставил на паузу
     }
   };
 
   ws.onclose = () => {
+    if (!wantRoom) return;                   // вышли сами или комнату закрыли — не возвращаемся
     setState(reconnectDelay < 3000 ? 'state.lost' : 'state.waking');
-    setTimeout(connect, reconnectDelay);
+    setTimeout(() => { if (wantRoom) connect(); }, reconnectDelay);
     reconnectDelay = Math.min(8000, reconnectDelay * 1.7);
   };
 }
@@ -1302,24 +1323,34 @@ $('#urlGo').onclick = async () => {
 };
 
 /* Полный выход: раньше глушилась только картинка, а музыка,
-   микрофон и соединение с собеседником продолжали жить. */
-ui.exit.onclick = () => {
+   микрофон и соединение с собеседником продолжали жить. Тем же путём
+   гость уходит, когда Мастер закрыл комнату. */
+function leaveRoom(why) {
+  wantRoom = false; loadToken++;
+  if (dl) dl.cancelled = true;
   stopSource();
   buffer = null; currentTrack = null; playing = false;
   track = null;
   if (remoteAudio) { remoteAudio.pause(); remoteAudio.srcObject = null; }
   if (localStream) { localStream.getTracks().forEach(x => x.stop()); localStream = null; }
   if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } voiceNode = null; }
-  remoteAn = null; voiceRoute = 'element'; voiceFallback = false;
+  remoteAn = null; voiceRoute = 'element'; voiceFallback = false; peerSpeaking = false; selfSpeaking = false;
   if (pc) { try { pc.close(); } catch (e) { } pc = null; }
   if (ws) { try { ws.onclose = null; ws.close(); } catch (e) { } ws = null; }
   if (actx) { try { actx.suspend(); } catch (e) { } }
   analyser = null; gotRemote = false; otherId = null; queuedSignals = [];
+  selfId = null; masterId = null; isMaster = false;
   window.Scene.dispose();
   ui.chat.innerHTML = '';
   history.replaceState(null, '', '/');
   showView('home');
   loadWeather();
+  if (why) toast(t(why));
+}
+ui.exit.onclick = () => {
+  // Мастер выходит — сервер закрывает комнату и для гостя тоже
+  if (isMaster && ws && ws.readyState === 1) { try { ws.send(JSON.stringify({ type: 'leave' })); } catch (e) { } }
+  leaveRoom();
 };
 
 ui.transfer.onclick = () => ws.send(JSON.stringify({ type: 'transfer' }));
@@ -1679,11 +1710,14 @@ window.__pyr = {
     musicPos: musicPos(), expected: playing ? expectedPos() : null,
     download: track && track.dl ? Math.round(track.dl.got / track.dl.total * 100) : 100, chunks: track && track.chunks ? track.chunks.size : 0, sched: sched.length,
     schedInfo: sched.map(x => ({ k: x.k, from: x.from, start: x.startCtx })), lastScore: track ? track.lastScore : null,
-    sr: actx ? actx.sampleRate : null, playing, drift, hardResyncs, audioSession: navigator.audioSession ? navigator.audioSession.type : null
+    sr: actx ? actx.sampleRate : null, playing, drift, hardResyncs, audioSession: navigator.audioSession ? navigator.audioSession.type : null,
+    remoteLevel, outLevel, statsRemote, hasVoiceNode: !!voiceNode, iceState: pc ? pc.iceConnectionState : null, gotRemote, otherId, masterId, isMaster,
+    view: document.querySelector('#viewRoom').classList.contains('on') ? 'room' : 'home'
   }),
   send: m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); },
   setPeerSpeaking: v => { peerSpeaking = v; },
   setMic: on => setMic(on),
   inviteLink: () => inviteLink(),
-  closeSocket: () => { if (ws) ws.close(); }
+  closeSocket: () => { if (ws) ws.close(); },
+  breakEngine: () => { if (voiceNode) voiceNode.disconnect(); }   // для проверки возврата на элемент
 };

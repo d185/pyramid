@@ -11,6 +11,8 @@ window.LANGS = [
 window.I18N = {
 
   en: {
+    'diag.download': 'download',
+    'diag.v_lostnet': 'the network dropped the call — reconnecting',
     'toast.noaudio': 'The sound engine could not start — reload the page',
     'toast.no3d': 'The 3D room did not start; sound still works',
     'diag.errors': 'last errors',
@@ -216,6 +218,8 @@ window.I18N = {
   },
 
   ru: {
+    'diag.download': 'загрузка',
+    'diag.v_lostnet': 'сеть оборвала связь — переподключаюсь',
     'toast.noaudio': 'Звуковой движок не запустился — перезагрузите страницу',
     'toast.no3d': 'Трёхмерная комната не поднялась; звук работает',
     'diag.errors': 'последние ошибки',
@@ -421,6 +425,8 @@ window.I18N = {
   },
 
   es: {
+    'diag.download': 'descarga',
+    'diag.v_lostnet': 'la red cortó la llamada — reconectando',
     'toast.noaudio': 'El motor de sonido no arrancó — recarga la página',
     'toast.no3d': 'La sala 3D no arrancó; el sonido funciona',
     'diag.errors': 'últimos errores',
@@ -626,6 +632,8 @@ window.I18N = {
   },
 
   fr: {
+    'diag.download': 'téléchargement',
+    'diag.v_lostnet': 'le réseau a coupé l’appel — reconnexion',
     'toast.noaudio': 'Le moteur audio n’a pas démarré — rechargez la page',
     'toast.no3d': 'La salle 3D n’a pas démarré ; le son fonctionne',
     'diag.errors': 'dernières erreurs',
@@ -831,6 +839,8 @@ window.I18N = {
   },
 
   de: {
+    'diag.download': 'Download',
+    'diag.v_lostnet': 'das Netz hat die Verbindung getrennt — verbinde neu',
     'toast.noaudio': 'Die Audio-Engine startete nicht — Seite neu laden',
     'toast.no3d': 'Der 3D-Raum startete nicht; der Ton läuft',
     'diag.errors': 'letzte Fehler',

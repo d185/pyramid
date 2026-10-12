@@ -10,6 +10,17 @@
  */
 
 const $ = s => document.querySelector(s);
+/* Внутри родного приложения страница живёт не на сервере, а в оболочке, поэтому
+   к серверу обращается по полному адресу. В браузере адрес пустой — всё как было. */
+const SERVER = (window.PYRAMID_SERVER || '').replace(/\/$/, '');
+const api = p => SERVER + p;
+const webOrigin = () => SERVER || location.origin;
+/* ключ устройства: по нему сервер возвращает роль Мастера после обрыва связи */
+const clientKey = (() => {
+  let k = localStorage.getItem('pyr-key');
+  if (!k) { k = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('pyr-key', k); }
+  return k;
+})();
 
 /* Одна невидимая ошибка однажды убила половину приложения.
    Теперь любая всплывает на экран, а не прячется в журнале. */
@@ -205,7 +216,7 @@ function ensureVoiceCtx(force) {
   if (!vctx) return;
   vctxAfterMic = !!localStream;
   voiceGain = vctx.createGain();
-  voiceGain.gain.value = +ui.voice.value / 100;
+  voiceGain.gain.value = Math.pow(+ui.voice.value / 100, 1.5);
   voiceGain.connect(vctx.destination);
   outAn = vctx.createAnalyser(); outAn.fftSize = 512;
   voiceGain.connect(outAn);
@@ -264,7 +275,7 @@ function initAudio() {
   } catch (e) { noteError(t('toast.noaudio')); return; }
   musicGain = actx.createGain();
   duckGain = actx.createGain();
-  musicGain.gain.value = +ui.music.value / 100;
+  musicGain.gain.value = musicGainFor(+ui.music.value);
   duckGain.gain.value = 1;
   musicGain.connect(duckGain).connect(actx.destination);
   actxAfterMic = !!localStream;
@@ -298,9 +309,18 @@ async function getChunk(k) {
   if (!T) return null;
   if (T.chunks.has(k)) return T.chunks.get(k);
   if (T.whole) return T.chunks.get(0);
-  const c = T.plan[k];
+  let c = T.plan[k];
+  if (!c && T.dl && !T.dl.done) { refreshParse(T); c = T.plan[k]; }
   if (!c) return null;
   const p = (async () => {
+    // нужный участок мог ещё не докачаться — ждём, перечитывая разбор
+    while (T.dl && !T.dl.done && T.parsed.frames < c.to + 2) {
+      if (track !== T) throw new Error('cancelled');
+      if (T.dl.error) throw new Error('download');
+      await sleep(250);
+      refreshParse(T); c = T.plan[k] || c;
+    }
+    if (T.dl && T.dl.done && T.parsed.frames < c.to) { refreshParse(T); c = T.plan[k] || c; }
     let ab;
     try { ab = await decodeAB(MP3Chunker.slice(T.parsed, c.from, c.to).buffer); }
     catch (e1) {
@@ -382,6 +402,7 @@ async function scheduleAhead() {
   const last = sched[sched.length - 1];
   if (!last) return;
   const k = last.k + 1;
+  if (k >= track.plan.length && track.dl && !track.dl.done) refreshParse(track);
   if (k >= track.plan.length || sched.some(x => x.k === k)) return;
   const secLeft = (track.chunks.get(last.k).start + track.chunks.get(last.k).ab.length) / actx.sampleRate - musicPos();
   if (secLeft > 8) return;                       // рано — память бережём
@@ -430,25 +451,58 @@ async function startAt(startAtServer, offset) {
   setState('state.playing');
 }
 
-/* Трек скачивается целиком в сжатом виде — около мегабайта на минуту — и режется
-   на куски уже в памяти телефона. */
-async function fetchWhole(url, token) {
-  const r = await fetch(url, { cache: 'force-cache' });
+/* Загрузка трека. Первые полтора мегабайта — сразу: этого хватает на первый кусок,
+   и музыка стартует почти мгновенно. Остальное подтягивается в фоне не быстрее
+   250 КБ/с — это в десять раз быстрее, чем нужно для звука, но оставляет канал
+   голосу. Раньше весь файл качался на полной скорости, и первые полминуты
+   голосу не хватало сети. */
+const FIRST = 1536 * 1024, PIECE = 512 * 1024, RATE = 250 * 1024;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let dl = null;
+async function startDownload(url, token) {
+  const u = url.startsWith('http') ? url : api(url);
+  const r = await fetch(u, { headers: { Range: 'bytes=0-' + (FIRST - 1) } });
   if (!r.ok) { const e = new Error('http'); e.status = r.status; throw e; }
-  const total = +r.headers.get('content-length') || 0;
-  if (!r.body || !r.body.getReader) return new Uint8Array(await r.arrayBuffer());
-  const reader = r.body.getReader(), parts = [];
-  let got = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (token !== loadToken) { try { reader.cancel(); } catch (e) { } throw new Error('cancelled'); }
-    parts.push(value); got += value.length;
-    if (total) ui.state.textContent = t('state.loading') + ' ' + Math.round(got / total * 100) + '%';
+  const first = new Uint8Array(await r.arrayBuffer());
+  const total = r.status === 206 ? (+((r.headers.get('Content-Range') || '').split('/')[1]) || first.length) : first.length;
+  const d = { total, buf: new Uint8Array(total), got: 0, done: false, error: null, cancelled: false };
+  d.buf.set(first, 0); d.got = first.length; d.done = d.got >= total;
+  if (dl) dl.cancelled = true;          // прежняя загрузка больше не нужна
+  dl = d;
+  if (!d.done) (async () => {
+    const t0 = performance.now(), start = d.got;
+    while (!d.done) {
+      if (d.cancelled) return;
+      const end = Math.min(total - 1, d.got + PIECE - 1);
+      let rr;
+      try { rr = await fetch(u, { headers: { Range: 'bytes=' + d.got + '-' + end } }); }
+      catch (e) { await sleep(1500); continue; }
+      if (rr.status !== 206) { d.error = rr.status; return; }
+      const b = new Uint8Array(await rr.arrayBuffer());
+      d.buf.set(b, d.got); d.got += b.length;
+      if (d.got >= total) { d.done = true; break; }
+      const should = (d.got - start) / RATE * 1000, spent = performance.now() - t0;
+      if (should > spent) await sleep(Math.min(1500, should - spent));
+    }
+  })();
+  return d;
+}
+/* разбор кадров по тому, что уже скачано */
+function refreshParse(T) {
+  const d = T.dl;
+  const p = MP3Chunker.parse(d.buf.subarray(0, d.got));
+  if (!p) return false;
+  if (!d.done) {                       // последние два кадра могут быть неполными
+    if (p.frames < 3) return false;
+    p.offs.length = p.frames - 1; p.frames -= 2;
+    p.duration = p.frames * p.spf / p.sampleRate;
   }
-  const out = new Uint8Array(got); let o = 0;
-  for (const p of parts) { out.set(p, o); o += p.length; }
-  return out;
+  T.parsed = p;
+  T.plan = MP3Chunker.plan(p, CHUNK_SEC, PRE);
+  const perFrame = (p.offs[p.frames] - p.offs[0]) / p.frames;
+  T.estDuration = d.done ? p.duration : (d.total - p.offs[0]) / perFrame * p.spf / p.sampleRate;
+  if (buffer) buffer.duration = T.estDuration;
+  return true;
 }
 
 function reportTrack(tr, reason) {
@@ -467,28 +521,30 @@ async function loadTrack(trackId) {
   setState('state.loading');
   stopSource();
   buffer = null; track = null;
+  if (dl) dl.cancelled = true;
   if (tr.bad) { reportTrack(tr, tr.bad); return; }
   initAudio();
-  let bytes;
-  try { bytes = await fetchWhole(tr.url, token); }
+  let d;
+  try { d = await startDownload(tr.url, token); }
   catch (e) {
-    if (token !== loadToken || e.message === 'cancelled') return;
+    if (token !== loadToken) return;
     reportTrack(tr, e.status === 404 ? 'missing' : 'network');
     return;
   }
   if (token !== loadToken) return;
-  const parsed = MP3Chunker.parse(bytes);
   try {
-    if (parsed && parsed.frames > 10) {
-      const T = { parsed, plan: MP3Chunker.plan(parsed, CHUNK_SEC, PRE), chunks: new Map(),
-        spfCtx: parsed.spf * actx.sampleRate / parsed.sampleRate, delta: 0, whole: false };
+    const T = { dl: d, chunks: new Map(), delta: 0, whole: false, parsed: null, plan: [], spfCtx: 1, estDuration: 0 };
+    if (refreshParse(T) && T.parsed.frames > 10) {
+      T.spfCtx = T.parsed.spf * actx.sampleRate / T.parsed.sampleRate;
       track = T;
       await getChunk(0);                         // первый кусок — сразу, остальные по ходу
-      buffer = { duration: parsed.duration };
+      buffer = { duration: T.estDuration };
     } else {
-      // не mp3 (wav, m4a…): расшифровываем целиком
-      const ab = await decodeAB(bytes.buffer);
-      track = { whole: true, chunks: new Map([[0, { k: 0, ab, start: 0 }]]), plan: [{ from: 0, to: 0 }], spfCtx: 1 };
+      // не mp3 (wav, m4a…): ждём файл целиком и расшифровываем
+      while (!d.done && !d.error) { if (token !== loadToken) return; ui.state.textContent = t('state.loading') + ' ' + Math.round(d.got / d.total * 100) + '%'; await sleep(300); }
+      if (d.error) throw new Error('download');
+      const ab = await decodeAB(d.buf.buffer);
+      track = { whole: true, chunks: new Map([[0, { k: 0, ab, start: 0 }]]), plan: [{ from: 0, to: 0 }], spfCtx: 1, dl: d };
       buffer = { duration: ab.duration };
     }
   } catch (e) {
@@ -502,12 +558,13 @@ async function loadTrack(trackId) {
 
 /* каждые 300 мс: подготовить следующий кусок, проверить конец и общие часы */
 setInterval(() => {
+  if (track && track.dl && track.dl.done && !track.final && !track.whole) { refreshParse(track); track.final = true; }
   if (!playing || !buffer || !actx) return;
   if (actx.state !== 'running') { musicBlocked = true; return; }
   scheduleAhead();
   pos = musicPos();
   drift = pos - expectedPos() - outLatency();
-  if (pos >= buffer.duration - 0.05) { playing = false; setState('state.ended'); }
+  if (pos >= buffer.duration - 0.05) { playing = false; setState('state.ended'); if (isMaster && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'ended' })); }
   // сильно разошлись (телефон уснул, вкладка была в фоне) — перезапуск с нужного места
   if (Math.abs(drift) > 0.25) { hardResyncs++; startAt(serverStartAt, serverOffset); }
 }, 300);
@@ -582,8 +639,9 @@ setInterval(() => {
   if (!remoteAn) return;
   remoteLevel = lvl(remoteAn);
   if (voiceRoute === 'gain') {
-    const theySpeak = statsRemote > 0.02 || peerSpeaking;
-    if (theySpeak && remoteLevel < 0.001) {
+    // доказательство — только сам приходящий звук; сообщение «говорю» через сервер
+    // ничего не доказывает: оно приходит и тогда, когда соединение оборвалось
+    if (connectedNow() && statsRemote > 0.02 && remoteLevel < 0.001) {
       if (!deafSince) deafSince = performance.now();
       else if (performance.now() - deafSince > 2000) useElementRoute(true);
     } else deafSince = 0;
@@ -729,16 +787,21 @@ function makePeer() {
     if (!isInitiator) return;                  // отвечающая сторона предложений не шлёт
     try {
       makingOffer = true;
-      await pc.setLocalDescription();
+      await setLocalTuned();
       ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
     } catch (e) { console.warn('предложение', e); } finally { makingOffer = false; }
   };
   pc.oniceconnectionstatechange = () => {
     if (connectedNow() && remoteStream && !voiceNode) probeVoice(remoteStream);
-    if (pc.iceConnectionState === 'failed' && isInitiator) { toast(t('toast.icefail')); pc.restartIce(); }
+    if (pc.iceConnectionState === 'failed' && isInitiator) {
+      toast(t('toast.icefail')); pc.restartIce();
+      const was = pc;
+      setTimeout(() => { if (pc === was && !connectedNow()) rebuildPeer(true); }, 6000);
+    }
     if (pc.iceConnectionState === 'disconnected' && isInitiator) setTimeout(() => {
       if (pc && pc.iceConnectionState === 'disconnected') pc.restartIce();
     }, 2500);
+    if (connectedNow()) adaptBitrate(true);
   };
 
   flushSignals();
@@ -755,13 +818,73 @@ function makePeer() {
   }, 500);
 }
 
+/* Настройка кодека в описании соединения: встроенное восстановление потерянных
+   пакетов (FEC) — голос переживает потери до 10–20%; моно; умеренный битрейт.
+   Так делают в примерах webrtc.github.io/samples и во всех звонилках. */
+function tuneSdp(sdp) {
+  if (!sdp) return sdp;
+  const m = sdp.match(/a=rtpmap:(\d+) opus\/48000/i);
+  if (!m) return sdp;
+  const pt = m[1], extra = 'minptime=10;useinbandfec=1;stereo=0;sprop-stereo=0;maxaveragebitrate=32000;cbr=0;usedtx=0';
+  const re = new RegExp('a=fmtp:' + pt + ' ([^\\r\\n]*)');
+  if (re.test(sdp)) sdp = sdp.replace(re, (all, p) => 'a=fmtp:' + pt + ' ' + p.replace(/;?(useinbandfec|minptime|stereo|sprop-stereo|maxaveragebitrate|cbr|usedtx)=[^;]*/g, '').replace(/^;+|;+$/g, '') + (p.replace(/;?(useinbandfec|minptime|stereo|sprop-stereo|maxaveragebitrate|cbr|usedtx)=[^;]*/g, '').replace(/^;+|;+$/g, '') ? ';' : '') + extra);
+  else sdp = sdp.replace(new RegExp('(a=rtpmap:' + pt + ' opus\\/48000[^\\r\\n]*\\r?\\n)'), '$1a=fmtp:' + pt + ' ' + extra + '\r\n');
+  return sdp;
+}
+async function setLocalTuned(init) {
+  const d = init || await (pc.remoteDescription && pc.remoteDescription.type === 'offer' ? pc.createAnswer() : pc.createOffer());
+  d.sdp = tuneSdp(d.sdp);
+  await pc.setLocalDescription(d);
+}
+
+/* Пересборка звонка с нуля — когда перезапуск не помог */
+function rebuildPeer(tellOther) {
+  if (tellOther && ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'signal', data: { rebuild: true } }));
+  if (pc) { try { pc.close(); } catch (e) { } }
+  pc = null; queuedSignals = []; pendingCandidates = [];
+  if (voiceNode) { try { voiceNode.disconnect(); } catch (e) { } voiceNode = null; }
+  remoteAn = null; voiceRoute = 'element'; voiceFallback = false; gotRemote = false; deafSince = 0;
+  if (otherId) makePeer();
+}
+
+/* Голос важнее всего: при потерях и большой задержке снижаем свой битрейт,
+   при хорошей сети возвращаем. Музыка канал не занимает — она уже на устройстве. */
+let lastLost = 0, lastSent = 0, lowBitrate = false;
+async function adaptBitrate(reset) {
+  if (!pc) return;
+  if (reset) { lastLost = 0; lastSent = 0; return; }
+  try {
+    const st = await pc.getStats();
+    let lost = 0, sent = 0, rtt = 0;
+    st.forEach(r => {
+      if (r.type === 'remote-inbound-rtp' && r.kind === 'audio') { lost = r.packetsLost || 0; if (r.roundTripTime) rtt = r.roundTripTime; }
+      if (r.type === 'outbound-rtp' && r.kind === 'audio') sent = r.packetsSent || 0;
+    });
+    const dl = lost - lastLost, ds = sent - lastSent;
+    lastLost = lost; lastSent = sent;
+    if (ds < 20) return;
+    const lossPct = dl / ds * 100;
+    const bad = lossPct > 5 || rtt > 0.35, good = lossPct < 1 && rtt < 0.2;
+    if ((bad && !lowBitrate) || (good && lowBitrate)) {
+      lowBitrate = bad && !good;
+      const sender = pc.getSenders().find(x => x.track && x.track.kind === 'audio');
+      if (!sender) return;
+      const p = sender.getParameters(); if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+      p.encodings[0].maxBitrate = lowBitrate ? 16000 : 40000;
+      try { await sender.setParameters(p); } catch (e) { }
+    }
+  } catch (e) { }
+}
+setInterval(() => adaptBitrate(false), 2000);
+
 async function onSignal(m) {
   if (!pc) { queuedSignals.push(m); return; }
   const d = m.data;
+  if (d.rebuild) { rebuildPeer(false); return; }
   try {
     if (d.needOffer) {                              // собеседник просит повторить
       if (isInitiator) {
-        await pc.setLocalDescription(await pc.createOffer({ iceRestart: true }));
+        await setLocalTuned(await pc.createOffer({ iceRestart: true }));
         ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
       }
       return;
@@ -779,7 +902,7 @@ async function onSignal(m) {
         try { await pc.addIceCandidate(c); iceGot++; } catch (e) { iceDropped++; }
       }
       if (d.description.type === 'offer') {
-        await pc.setLocalDescription();
+        await setLocalTuned();
         ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } }));
       }
     } else if (d.candidate) {
@@ -798,7 +921,7 @@ setInterval(() => {
   stalled = 0;
   if (isInitiator) {
     pc.createOffer({ iceRestart: true })
-      .then(o => pc.setLocalDescription(o))
+      .then(o => setLocalTuned(o))
       .then(() => ws.send(JSON.stringify({ type: 'signal', data: { description: pc.localDescription } })))
       .catch(() => { });
   } else {
@@ -855,11 +978,11 @@ let reconnectDelay = 500;
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(proto + '://' + location.host);
+  ws = new WebSocket(SERVER ? SERVER.replace(/^http/, 'ws') : proto + '://' + location.host);
 
   ws.onopen = () => {
     reconnectDelay = 500;
-    ws.send(JSON.stringify({ type: 'hello', room: roomId, style: roomStyle, name: localStorage.getItem('pyr-name') || t('name.guest') }));
+    ws.send(JSON.stringify({ type: 'hello', key: clientKey, room: roomId, style: roomStyle, name: localStorage.getItem('pyr-name') || t('name.guest') }));
     for (let i = 0; i < 8; i++) setTimeout(ping, i * 120);   // быстрая первичная настройка часов
   };
 
@@ -1100,12 +1223,19 @@ setInterval(() => {
   ui.fwd15.disabled = !can;
 }, 300);
 
+/* Ползунок музыки. Половина хода — тихая музыка: на 50% звук уже в четыре раза
+   тише полного, на 25% — в тридцать, на 10% — едва слышен. Правая половина
+   добирает громкость до полной. Так настраивается очень тихий фон. */
+function musicGainFor(v) {
+  v = Math.max(0, Math.min(100, +v || 0));
+  return v <= 50 ? Math.pow(v / 50, 3) * 0.25 : 0.25 + Math.pow((v - 50) / 50, 1.5) * 0.75;
+}
 ui.music.oninput = () => {
-  if (musicGain) musicGain.gain.value = +ui.music.value / 100;
+  if (musicGain) musicGain.gain.value = musicGainFor(+ui.music.value);
   $('#musicVal').textContent = ui.music.value;
 };
 ui.voice.oninput = () => {
-  const v = +ui.voice.value / 100;
+  const v = Math.pow(+ui.voice.value / 100, 1.5);
   remoteAudio.volume = v;
   if (voiceGain) voiceGain.gain.value = v;
   $('#voiceVal').textContent = ui.voice.value;
@@ -1162,7 +1292,7 @@ $('#urlGo').onclick = async () => {
   if (!u) return;
   closeDrops(); $('#urlInput').value = ''; toast(t('toast.fetching'));
   try {
-    const r = await fetch('/api/fetch?url=' + encodeURIComponent(u), { method: 'POST' });
+    const r = await fetch(api('/api/fetch?url=' + encodeURIComponent(u)), { method: 'POST' });
     const txt = await r.text();
     if (!r.ok) return toast(t('toast.uploadfail', { e: txt }));
     const j = JSON.parse(txt);
@@ -1195,7 +1325,7 @@ ui.exit.onclick = () => {
 ui.transfer.onclick = () => ws.send(JSON.stringify({ type: 'transfer' }));
 $('#diagBtn').onclick = () => $('#diagSheet').classList.toggle('on');
 
-function inviteLink() { return location.origin + '/?room=' + encodeURIComponent(roomId); }
+function inviteLink() { return webOrigin() + '/?room=' + encodeURIComponent(roomId); }
 
 ui.invite.onclick = () => {
   const link = inviteLink(), text = t('invite.text', { link });
@@ -1234,7 +1364,7 @@ ui.upload.onchange = () => {
   if (f.size > 80e6) return toast(t('toast.uploadbig'));
   // XHR, а не fetch: только он показывает ход загрузки на телефоне
   const x = new XMLHttpRequest();
-  x.open('POST', '/api/upload?name=' + encodeURIComponent(f.name));
+  x.open('POST', api('/api/upload?name=' + encodeURIComponent(f.name)));
   x.upload.onprogress = e => {
     if (e.lengthComputable) toast(t('toast.uploading', { p: Math.round(e.loaded / e.total * 100) }));
   };
@@ -1259,7 +1389,7 @@ function voiceVerdict() {
   if (st === 'connected' || st === 'completed')
     return remoteBlocked ? t('diag.v_tap') : t('diag.v_ok');
   if (st === 'failed' || (checkingSince && Date.now() - checkingSince > 12000))
-    return cfg.hasTurn ? t('diag.v_failturn') : t('diag.v_needturn');
+    return !cfg.hasTurn ? t('diag.v_needturn') : (gotRemote ? t('diag.v_lostnet') : t('diag.v_failturn'));
   return t('diag.v_wait');
 }
 setInterval(async () => {
@@ -1291,7 +1421,7 @@ setInterval(async () => {
     [t('diag.aec'), headphones ? t('diag.aecoff') : t('diag.aecon')],
     [t('diag.mymic'), micError ? t('diag.mic_denied') : !localStream ? '—' : !micOn ? t('diag.mic_off') : t('diag.mic_level') + ' ' + Math.round(selfLevel * 300) + '%'],
     [t('diag.musicstate'), !buffer ? '—' : musicBlocked ? t('diag.m_blocked') : (!playing ? t('diag.m_paused') : t('diag.m_playing')) +
-      (track && !track.whole && sched[0] ? ', ' + t('diag.chunk') + ' ' + (sched[sched.length - 1].k + 1) + '/' + track.plan.length : '') + ', ' + t('diag.stalls') + ' ' + stalls],
+      (track && !track.whole && sched[0] ? ', ' + t('diag.chunk') + ' ' + (sched[sched.length - 1].k + 1) + '/' + track.plan.length : '') + ', ' + t('diag.stalls') + ' ' + stalls + (track && track.dl && !track.dl.done ? ', ' + t('diag.download') + ' ' + Math.round(track.dl.got / track.dl.total * 100) + '%' : '')],
     [t('diag.voicepath'), !gotRemote ? '—' : voiceRoute === 'gain'
       ? t('diag.vp_gain') + ': ' + t('diag.vp_in') + ' ' + Math.round(remoteLevel * 300) + '%, ' + t('diag.vp_out') + ' ' + Math.round(outLevel * 300) + '%'
       : t('diag.vp_el') + ', ' + t('diag.vp_net') + ' ' + Math.round(statsRemote * 300) + '%'],
@@ -1499,11 +1629,11 @@ async function unlock() {
   catch (e) { micError = (e && e.name) || 'error'; toast(t('gate.nomic')); }
   initAudio();                        // если движок уже создан замером микрофона — ничего не делает
   try { await actx.resume(); } catch (e) { }
-  if (musicGain) musicGain.gain.value = +ui.music.value / 100;
+  if (musicGain) musicGain.gain.value = musicGainFor(+ui.music.value);
   if (localStream && !levelTimer) watchLevel(localStream);
   ensureVoiceCtx();
   attachAnalyser();
-  try { cfg = await (await fetch('/api/config')).json(); } catch (e) { }
+  try { cfg = await (await fetch(api('/api/config'))).json(); } catch (e) { }
 }
 
 $('#enter').onclick = async () => {
@@ -1546,11 +1676,14 @@ window.__pyr = {
     voiceGain: voiceGain ? voiceGain.gain.value : null,
     voiceFallback, selfId, micOn, micError: micError || null, voiceRoute, selfLevel,
     actxState: actx ? actx.state : null, vctxState: vctx ? vctx.state : null, ownVoiceCtx: !!vctx && vctx !== actx, muted: remoteAudio.muted, stalls,
-    musicPos: musicPos(), expected: playing ? expectedPos() : null, chunks: track && track.chunks ? track.chunks.size : 0, sched: sched.length,
+    musicPos: musicPos(), expected: playing ? expectedPos() : null,
+    download: track && track.dl ? Math.round(track.dl.got / track.dl.total * 100) : 100, chunks: track && track.chunks ? track.chunks.size : 0, sched: sched.length,
     schedInfo: sched.map(x => ({ k: x.k, from: x.from, start: x.startCtx })), lastScore: track ? track.lastScore : null,
     sr: actx ? actx.sampleRate : null, playing, drift, hardResyncs, audioSession: navigator.audioSession ? navigator.audioSession.type : null
   }),
   send: m => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(m)); },
   setPeerSpeaking: v => { peerSpeaking = v; },
-  setMic: on => setMic(on)
+  setMic: on => setMic(on),
+  inviteLink: () => inviteLink(),
+  closeSocket: () => { if (ws) ws.close(); }
 };
